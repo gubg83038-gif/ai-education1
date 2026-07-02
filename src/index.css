@@ -276,6 +276,11 @@ textarea, input[type="text"], input[type="date"] {
   gap: 12px;
 }
 
+.onboarding-actions-left {
+  display: flex;
+  gap: 8px;
+}
+
 .generating {
   text-align: center;
 }

@@ -6,6 +6,7 @@ import { Target, Clock, BarChart3, BookOpen, AlertTriangle, FileText } from 'luc
 
 interface Props {
   onComplete: () => void;
+  onCancel: () => void;
 }
 
 const DIMENSIONS = [
@@ -71,7 +72,7 @@ const DIMENSIONS = [
   },
 ];
 
-export default function Onboarding({ onComplete }: Props) {
+export default function Onboarding({ onComplete, onCancel }: Props) {
   const [profile, setProfile] = useState<UserProfile & { planName: string }>({
     goal: '',
     planName: '',
@@ -205,9 +206,12 @@ export default function Onboarding({ onComplete }: Props) {
         </div>
 
         <div className="onboarding-actions">
-          {step > 0 && (
-            <button className="btn btn-secondary" onClick={handlePrev}>上一步</button>
-          )}
+          <div className="onboarding-actions-left">
+            <button className="btn btn-ghost" onClick={onCancel}>返回</button>
+            {step > 0 && (
+              <button className="btn btn-secondary" onClick={handlePrev}>上一步</button>
+            )}
+          </div>
           <button className="btn btn-primary" onClick={handleNext} disabled={!canNext()}>
             {step === DIMENSIONS.length - 1 ? '生成计划' : '下一步'}
           </button>

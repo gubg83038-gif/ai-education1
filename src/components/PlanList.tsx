@@ -46,7 +46,7 @@ export default function PlanList({ onSelectPlan }: Props) {
   };
 
   if (showOnboarding) {
-    return <Onboarding onComplete={handleOnboardingComplete} />;
+    return <Onboarding onComplete={handleOnboardingComplete} onCancel={() => setShowOnboarding(false)} />;
   }
 
   return (
