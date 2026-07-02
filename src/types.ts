@@ -1,8 +1,10 @@
+export type LearningStyle = 'visual' | 'reading' | 'hands-on' | 'mixed';
+
 export interface UserProfile {
   goal: string;
   timePerDay: number;
   difficultyTolerance: number;
-  learningStyle: 'visual' | 'reading' | 'hands-on' | 'mixed';
+  learningStyles: LearningStyle[];
   constraints: string;
   startDate: string;
 }

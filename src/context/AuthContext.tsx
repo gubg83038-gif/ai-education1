@@ -26,9 +26,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(() => setRefreshKey(k => k + 1), []);
 
   useEffect(() => {
-    migrateLegacyData();
-    const u = getCurrentUser();
-    setUser(u);
+    try {
+      migrateLegacyData();
+      const u = getCurrentUser();
+      setUser(u);
+    } catch {
+      localStorage.removeItem('ai_education_data');
+      localStorage.removeItem('ai_education_plan');
+    }
     setLoading(false);
   }, []);
 

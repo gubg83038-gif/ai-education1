@@ -115,7 +115,9 @@ export default function PlanList({ onSelectPlan }: Props) {
                 </div>
 
                 <div className="plan-tags">
-                  <span className="plan-tag">{plan.profile.learningStyle === 'visual' ? '视觉型' : plan.profile.learningStyle === 'reading' ? '阅读型' : plan.profile.learningStyle === 'hands-on' ? '实践型' : '混合型'}</span>
+                  {plan.profile.learningStyles.map(s => (
+                    <span key={s} className="plan-tag">{s === 'visual' ? '视觉型' : s === 'reading' ? '阅读型' : s === 'hands-on' ? '实践型' : '混合型'}</span>
+                  ))}
                   <span className="plan-tag">{plan.profile.timePerDay}分钟/天</span>
                 </div>
               </div>

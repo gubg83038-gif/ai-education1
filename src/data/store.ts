@@ -5,7 +5,23 @@ const DATA_KEY = 'ai_education_data';
 function loadData(): AppData {
   try {
     const raw = localStorage.getItem(DATA_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const data = JSON.parse(raw);
+      // Migrate old learningStyle -> learningStyles in all plans
+      if (data.users) {
+        for (const u of data.users) {
+          if (u.plans) {
+            for (const p of u.plans) {
+              if (p.profile && (p.profile as any).learningStyle && !p.profile.learningStyles) {
+                p.profile.learningStyles = [(p.profile as any).learningStyle];
+                delete (p.profile as any).learningStyle;
+              }
+            }
+          }
+        }
+      }
+      return data;
+    }
   } catch { /* ignore */ }
   return { users: [], currentUserId: null };
 }
@@ -61,9 +77,15 @@ export function logout(): void {
 }
 
 export function getCurrentUser(): UserAccount | null {
-  const data = loadData();
-  if (!data.currentUserId) return null;
-  return data.users.find(u => u.id === data.currentUserId) || null;
+  try {
+    const data = loadData();
+    if (!data.currentUserId) return null;
+    return data.users.find(u => u.id === data.currentUserId) || null;
+  } catch {
+    // Corrupted data - clear and start fresh
+    localStorage.removeItem(DATA_KEY);
+    return null;
+  }
 }
 
 export function updateUserPlans(plans: Plan[]): void {
@@ -223,11 +245,17 @@ export function migrateLegacyData(): boolean {
   const data = loadData();
   if (data.users.length > 0) return false;
 
+  const legacyPlan = legacy.plan;
+  if ((legacyPlan.profile as any).learningStyle && !legacyPlan.profile.learningStyles) {
+    (legacyPlan.profile as any).learningStyles = [(legacyPlan.profile as any).learningStyle];
+    delete (legacyPlan.profile as any).learningStyle;
+  }
+
   const user: UserAccount = {
     id: 'u_legacy',
     username: '默认用户',
     passwordHash: hashSimple('admin'),
-    plans: [{ ...legacy.plan, name: '我的计划' }],
+    plans: [{ ...legacyPlan, name: '我的计划' }],
     dailyLogs: legacy.dailyLogs || [],
     taskHistory: legacy.taskHistory || [],
     createdAt: new Date().toISOString(),

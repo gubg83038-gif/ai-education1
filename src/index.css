@@ -245,9 +245,31 @@ textarea, input[type="text"], input[type="date"] {
   background: var(--bg-card);
   text-align: left;
   font-size: 14px;
+  display: flex;
+  align-items: center;
 }
 .select-option:hover { border-color: var(--primary-light); background: var(--primary-bg); }
 .select-option.selected { border-color: var(--primary); background: var(--primary-bg); color: var(--primary); font-weight: 500; }
+
+.checkbox-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  margin-right: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+.checkbox-mark.checked {
+  background: var(--primary);
+  border-color: var(--primary);
+}
 
 .date-picker {
   margin-top: 16px;

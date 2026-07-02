@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { UserProfile } from '../types';
+import type { UserProfile, LearningStyle } from '../types';
 import { generatePlan } from '../engine/planGenerator';
 import { addPlan } from '../data/store';
 import { Target, Clock, BarChart3, BookOpen, AlertTriangle, FileText } from 'lucide-react';
@@ -49,12 +49,12 @@ const DIMENSIONS = [
     step: 1,
   },
   {
-    key: 'learningStyle' as const,
-    label: '学习风格偏好',
+    key: 'learningStyles' as const,
+    label: '学习风格偏好（可多选）',
     icon: BookOpen,
     placeholder: '',
-    hint: '选择最符合你习惯的学习方式',
-    type: 'select' as const,
+    hint: '可选择多个偏好，系统会融合生成任务。选择"混合型"将包含所有类型',
+    type: 'multiselect' as const,
     options: [
       { value: 'visual', label: '视觉型 - 偏好视频、图表、图像' },
       { value: 'reading', label: '阅读型 - 偏好文字、书籍、文档' },
@@ -78,7 +78,7 @@ export default function Onboarding({ onComplete, onCancel }: Props) {
     planName: '',
     timePerDay: 60,
     difficultyTolerance: 5,
-    learningStyle: 'mixed',
+    learningStyles: ['mixed'],
     constraints: '',
     startDate: new Date().toISOString().split('T')[0],
   });
@@ -111,6 +111,7 @@ export default function Onboarding({ onComplete, onCancel }: Props) {
   const canNext = () => {
     if (dim.key === 'goal') return profile.goal.trim().length > 0;
     if (dim.key === 'planName') return profile.planName.trim().length > 0;
+    if (dim.key === 'learningStyles') return profile.learningStyles.length > 0;
     return true;
   };
 
@@ -178,17 +179,39 @@ export default function Onboarding({ onComplete, onCancel }: Props) {
             </div>
           )}
 
-          {dim.type === 'select' && (
+          {dim.type === 'multiselect' && (
             <div className="select-group">
-              {dim.options!.map(opt => (
-                <button
-                  key={opt.value}
-                  className={`select-option ${profile.learningStyle === opt.value ? 'selected' : ''}`}
-                  onClick={() => setProfile({ ...profile, learningStyle: opt.value as UserProfile['learningStyle'] })}
-                >
-                  {opt.label}
-                </button>
-              ))}
+              {dim.options!.map(opt => {
+                const isSelected = profile.learningStyles.includes(opt.value as LearningStyle);
+                const handleToggle = () => {
+                  const val = opt.value as LearningStyle;
+                  let next: LearningStyle[];
+                  if (val === 'mixed') {
+                    next = isSelected ? [] : ['mixed'];
+                  } else {
+                    const withoutMixed = profile.learningStyles.filter(s => s !== 'mixed');
+                    if (isSelected) {
+                      next = withoutMixed.filter(s => s !== val);
+                    } else {
+                      next = [...withoutMixed, val];
+                    }
+                    if (next.length === 0) next = ['mixed'];
+                  }
+                  setProfile({ ...profile, learningStyles: next });
+                };
+                return (
+                  <button
+                    key={opt.value}
+                    className={`select-option ${isSelected ? 'selected' : ''}`}
+                    onClick={handleToggle}
+                  >
+                    <span className={`checkbox-mark ${isSelected ? 'checked' : ''}`}>
+                      {isSelected ? '✓' : ''}
+                    </span>
+                    {opt.label}
+                  </button>
+                );
+              })}
             </div>
           )}
 

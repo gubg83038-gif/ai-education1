@@ -60,7 +60,8 @@ function shuffleArray<T>(arr: T[]): T[] {
 
 export function generatePlan(profile: UserProfile): Plan {
   const subgoals = parseGoal(profile.goal);
-  const actions = LEARNING_ACTIONS[profile.learningStyle] || LEARNING_ACTIONS.mixed;
+  const actionsList = profile.learningStyles.flatMap(s => LEARNING_ACTIONS[s] || []);
+  const actions = actionsList.length > 0 ? actionsList : LEARNING_ACTIONS.mixed;
   const weeks: WeekPlan[] = [];
 
   for (let w = 1; w <= 4; w++) {
