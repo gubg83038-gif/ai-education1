@@ -1,12 +1,13 @@
 import { useState, useMemo } from 'react';
 import type { Plan, Task, TaskStatus, DailyLog } from '../types';
 import { adjustPlan } from '../engine/adjuster';
-import { updateTaskStatus, saveDailyLog, getDailyLog, savePlan } from '../data/store';
-import { Check, Clock, SkipForward, AlertCircle, ChevronRight, ChevronLeft, BarChart3, Zap, Battery, Brain } from 'lucide-react';
+import { updateTaskStatus, saveDailyLog, getDailyLog, updatePlan, addTaskToPlan, updateTaskInPlan, deleteTaskFromPlan } from '../data/store';
+import { Check, Clock, SkipForward, AlertCircle, ChevronRight, ChevronLeft, BarChart3, Zap, Battery, Brain, Plus, Trash2, Edit3, ArrowLeft, MoveUp, MoveDown } from 'lucide-react';
 
 interface Props {
+  planId: string;
   plan: Plan;
-  onPlanUpdate: (plan: Plan) => void;
+  onBack: () => void;
   onViewInsights: () => void;
 }
 
@@ -18,29 +19,18 @@ const STATUS_CONFIG: Record<TaskStatus, { icon: React.ReactNode; label: string; 
   skipped: { icon: <SkipForward size={14} />, label: '已跳过', className: 'status-skipped' },
 };
 
-const DELAY_REASONS = [
-  '时间不够',
-  '难度太大',
-  '精力不足',
-  '有更紧急的事',
-  '缺乏动力',
-  '需要更多准备',
-];
-
+const DELAY_REASONS = ['时间不够', '难度太大', '精力不足', '有更紧急的事', '缺乏动力', '需要更多准备'];
 const WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+const CATEGORIES = ['阅读', '练习', '实践', '观看', '整理', '输出', '复习', '休息', '自定义'];
 
-export default function Dashboard({ plan, onPlanUpdate, onViewInsights }: Props) {
-  const [activeWeek, setActiveWeek] = useState(() => {
-    const today = new Date().toISOString().split('T')[0];
-    for (const w of plan.weeks) {
-      if (w.tasks.some(t => t.date >= today)) return w.weekNumber;
-    }
-    return 1;
-  });
-
+export default function Dashboard({ planId, plan: initialPlan, onBack, onViewInsights }: Props) {
+  const [plan, setPlan] = useState<Plan>(initialPlan);
+  const [activeWeek, setActiveWeek] = useState(1);
   const [expandedDays, setExpandedDays] = useState<Set<number>>(new Set([new Date().getDay() || 7]));
   const [delayTask, setDelayTask] = useState<Task | null>(null);
   const [showDailyLog, setShowDailyLog] = useState(false);
+  const [showAddTask, setShowAddTask] = useState<{ week: number; day: number } | null>(null);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const today = new Date().toISOString().split('T')[0];
   const todayLog = getDailyLog(today);
@@ -65,11 +55,13 @@ export default function Dashboard({ plan, onPlanUpdate, onViewInsights }: Props)
     return map;
   }, [currentWeek]);
 
+  const savePlan = (p: Plan) => {
+    setPlan(p);
+    updatePlan(planId, p);
+  };
+
   const handleStatusChange = (task: Task, newStatus: TaskStatus) => {
-    if (newStatus === 'delayed') {
-      setDelayTask(task);
-      return;
-    }
+    if (newStatus === 'delayed') { setDelayTask(task); return; }
     applyStatusChange(task, newStatus);
   };
 
@@ -79,10 +71,51 @@ export default function Dashboard({ plan, onPlanUpdate, onViewInsights }: Props)
       const t = updatedPlan.weeks.flatMap(w => w.tasks).find(t => t.id === task.id);
       if (t) t.delayedReason = reason;
     }
-    updateTaskStatus(task.id, newStatus, reason);
+    updateTaskStatus(planId, task.id, newStatus, reason);
     savePlan(updatedPlan);
-    onPlanUpdate(updatedPlan);
     setDelayTask(null);
+  };
+
+  const handleAddTask = (week: number, day: number, taskData: Partial<Task>) => {
+    const dayDate = plan.weeks[week - 1]?.tasks[0]?.date || today;
+    const newTask: Task = {
+      id: `custom_${Date.now()}`,
+      title: taskData.title || '新任务',
+      description: taskData.description || '',
+      estimatedMinutes: taskData.estimatedMinutes || 30,
+      difficulty: taskData.difficulty || 3,
+      week, day,
+      date: dayDate,
+      status: 'pending',
+      category: taskData.category || '自定义',
+      order: (tasksByDay[day] || []).length,
+      isCustom: true,
+    };
+    const updated = addTaskToPlan(planId, newTask);
+    if (updated) savePlan(updated);
+    setShowAddTask(null);
+  };
+
+  const handleEditTask = (task: Task, updates: Partial<Task>) => {
+    const updated = updateTaskInPlan(planId, task.id, updates);
+    if (updated) savePlan(updated);
+    setEditingTask(null);
+  };
+
+  const handleDeleteTask = (taskId: string) => {
+    if (confirm('确定删除这个任务吗？')) {
+      const updated = deleteTaskFromPlan(planId, taskId);
+      if (updated) savePlan(updated);
+    }
+  };
+
+  const handleMoveTask = (task: Task, direction: 'up' | 'down' | 'prevDay' | 'nextDay') => {
+    let newDay = task.day;
+    let newWeek = task.week;
+    if (direction === 'prevDay') { newDay = task.day - 1; if (newDay < 1) { newDay = 7; newWeek = task.week - 1; } }
+    if (direction === 'nextDay') { newDay = task.day + 1; if (newDay > 7) { newDay = 1; newWeek = task.week + 1; } }
+    if (newWeek < 1 || newWeek > 4) return;
+    handleEditTask(task, { week: newWeek, day: newDay });
   };
 
   const toggleDay = (day: number) => {
@@ -100,8 +133,13 @@ export default function Dashboard({ plan, onPlanUpdate, onViewInsights }: Props)
     <div className="dashboard">
       <header className="dashboard-header">
         <div className="header-info">
-          <h1>学习计划</h1>
-          <p className="header-goal">目标: {plan.profile.goal.slice(0, 50)}{plan.profile.goal.length > 50 ? '...' : ''}</p>
+          <button className="btn btn-ghost btn-back" onClick={onBack}>
+            <ArrowLeft size={16} /> 返回
+          </button>
+          <div>
+            <h1>{plan.name || plan.profile.goal.slice(0, 30)}</h1>
+            <p className="header-goal">目标: {plan.profile.goal.slice(0, 50)}{plan.profile.goal.length > 50 ? '...' : ''}</p>
+          </div>
         </div>
         <div className="header-actions">
           <div className="overall-progress">
@@ -118,11 +156,7 @@ export default function Dashboard({ plan, onPlanUpdate, onViewInsights }: Props)
       </header>
 
       <div className="week-navigator">
-        <button
-          className="btn btn-icon"
-          onClick={() => setActiveWeek(Math.max(1, activeWeek - 1))}
-          disabled={activeWeek === 1}
-        >
+        <button className="btn btn-icon" onClick={() => setActiveWeek(Math.max(1, activeWeek - 1))} disabled={activeWeek === 1}>
           <ChevronLeft size={20} />
         </button>
         {plan.weeks.map(w => (
@@ -134,45 +168,25 @@ export default function Dashboard({ plan, onPlanUpdate, onViewInsights }: Props)
             <span className="week-num">第{w.weekNumber}周</span>
             <span className="week-theme">{w.theme}</span>
             <div className="week-progress-bar">
-              <div
-                className="week-progress-fill"
-                style={{
-                  width: `${w.tasks.length > 0
-                    ? Math.round((w.tasks.filter(t => t.status === 'completed').length / w.tasks.length) * 100)
-                    : 0}%`,
-                }}
-              />
+              <div className="week-progress-fill" style={{
+                width: `${w.tasks.length > 0 ? Math.round((w.tasks.filter(t => t.status === 'completed').length / w.tasks.length) * 100) : 0}%`,
+              }} />
             </div>
           </button>
         ))}
-        <button
-          className="btn btn-icon"
-          onClick={() => setActiveWeek(Math.min(4, activeWeek + 1))}
-          disabled={activeWeek === 4}
-        >
+        <button className="btn btn-icon" onClick={() => setActiveWeek(Math.min(4, activeWeek + 1))} disabled={activeWeek === 4}>
           <ChevronRight size={20} />
         </button>
       </div>
 
       <div className="week-stats-bar">
-        <div className="stat-item">
-          <Check size={16} className="text-green" />
-          <span>{weekStats.completed}/{weekStats.total} 任务完成</span>
-        </div>
-        <div className="stat-item">
-          <Clock size={16} className="text-blue" />
-          <span>完成率 {weekStats.rate}%</span>
-        </div>
-        <div className="stat-item">
-          <Battery size={16} className="text-orange" />
-          <span>主题: {currentWeek.theme}</span>
-        </div>
+        <div className="stat-item"><Check size={16} className="text-green" /><span>{weekStats.completed}/{weekStats.total} 任务</span></div>
+        <div className="stat-item"><Clock size={16} className="text-blue" /><span>完成率 {weekStats.rate}%</span></div>
+        <div className="stat-item"><Battery size={16} className="text-orange" /><span>主题: {currentWeek.theme}</span></div>
       </div>
 
       <div className="week-goals">
-        {currentWeek.goals.map((g, i) => (
-          <span key={i} className="goal-tag">{g}</span>
-        ))}
+        {currentWeek.goals.map((g, i) => (<span key={i} className="goal-tag">{g}</span>))}
       </div>
 
       <div className="tasks-container">
@@ -194,20 +208,29 @@ export default function Dashboard({ plan, onPlanUpdate, onViewInsights }: Props)
                 </div>
                 <div className="day-meta">
                   <span className="day-progress-text">{dayCompleted}/{dayTasks.length}</span>
-                  <ChevronRight
-                    size={16}
-                    className={`day-chevron ${isExpanded ? 'rotated' : ''}`}
-                  />
+                  <button
+                    className="btn btn-icon btn-sm"
+                    onClick={e => { e.stopPropagation(); setShowAddTask({ week: activeWeek, day }); }}
+                    title="添加任务"
+                  >
+                    <Plus size={14} />
+                  </button>
+                  <ChevronRight size={16} className={`day-chevron ${isExpanded ? 'rotated' : ''}`} />
                 </div>
               </div>
 
               {isExpanded && (
                 <div className="day-tasks">
                   {dayTasks.length === 0 ? (
-                    <p className="empty-day">休息日，没有安排任务</p>
+                    <div className="empty-day">
+                      <p>这一天还没有任务</p>
+                      <button className="btn btn-outline btn-sm" onClick={() => setShowAddTask({ week: activeWeek, day })}>
+                        <Plus size={14} /> 添加任务
+                      </button>
+                    </div>
                   ) : (
-                    dayTasks.map(task => (
-                      <div key={task.id} className={`task-card ${task.status}`}>
+                    dayTasks.map((task, taskIdx) => (
+                      <div key={task.id} className={`task-card ${task.status} ${task.isCustom ? 'custom-task' : ''}`}>
                         <div className="task-main">
                           <div className="task-info">
                             <div className="task-header">
@@ -219,6 +242,7 @@ export default function Dashboard({ plan, onPlanUpdate, onViewInsights }: Props)
                                 {'★'.repeat(task.difficulty)}{'☆'.repeat(5 - task.difficulty)}
                               </span>
                               <span className="task-time">{task.estimatedMinutes}分钟</span>
+                              {task.isCustom && <span className="task-custom-badge">自定义</span>}
                             </div>
                             <h4 className="task-title">{task.title}</h4>
                             <p className="task-desc">{task.description}</p>
@@ -226,46 +250,25 @@ export default function Dashboard({ plan, onPlanUpdate, onViewInsights }: Props)
                               <p className="task-reason">延迟原因: {task.delayedReason}</p>
                             )}
                           </div>
-                          <div className="task-actions">
-                            {task.status === 'pending' || task.status === 'in_progress' ? (
-                              <>
-                                <button
-                                  className="btn btn-success btn-sm"
-                                  onClick={() => handleStatusChange(task, 'completed')}
-                                  title="标记完成"
-                                >
-                                  <Check size={14} />
-                                </button>
-                                <button
-                                  className="btn btn-warning btn-sm"
-                                  onClick={() => handleStatusChange(task, 'in_progress')}
-                                  title="开始执行"
-                                >
-                                  <Zap size={14} />
-                                </button>
-                                <button
-                                  className="btn btn-danger btn-sm"
-                                  onClick={() => handleStatusChange(task, 'delayed')}
-                                  title="标记延迟"
-                                >
-                                  <AlertCircle size={14} />
-                                </button>
-                                <button
-                                  className="btn btn-ghost btn-sm"
-                                  onClick={() => handleStatusChange(task, 'skipped')}
-                                  title="跳过"
-                                >
-                                  <SkipForward size={14} />
-                                </button>
-                              </>
-                            ) : (
-                              <button
-                                className="btn btn-outline btn-sm"
-                                onClick={() => handleStatusChange(task, 'pending')}
-                              >
-                                重置
-                              </button>
-                            )}
+                          <div className="task-actions-col">
+                            <div className="task-actions">
+                              {task.status === 'pending' || task.status === 'in_progress' ? (
+                                <>
+                                  <button className="btn btn-success btn-sm" onClick={() => handleStatusChange(task, 'completed')} title="完成"><Check size={14} /></button>
+                                  <button className="btn btn-warning btn-sm" onClick={() => handleStatusChange(task, 'in_progress')} title="开始"><Zap size={14} /></button>
+                                  <button className="btn btn-danger btn-sm" onClick={() => handleStatusChange(task, 'delayed')} title="延迟"><AlertCircle size={14} /></button>
+                                  <button className="btn btn-ghost btn-sm" onClick={() => handleStatusChange(task, 'skipped')} title="跳过"><SkipForward size={14} /></button>
+                                </>
+                              ) : (
+                                <button className="btn btn-outline btn-sm" onClick={() => handleStatusChange(task, 'pending')}>重置</button>
+                              )}
+                            </div>
+                            <div className="task-tools">
+                              <button className="btn btn-ghost btn-sm" onClick={() => setEditingTask(task)} title="编辑"><Edit3 size={12} /></button>
+                              <button className="btn btn-ghost btn-sm" onClick={() => handleDeleteTask(task.id)} title="删除"><Trash2 size={12} /></button>
+                              {taskIdx > 0 && <button className="btn btn-ghost btn-sm" onClick={() => handleMoveTask(task, 'prevDay')} title="移到前一天"><MoveUp size={12} /></button>}
+                              <button className="btn btn-ghost btn-sm" onClick={() => handleMoveTask(task, 'nextDay')} title="移到后一天"><MoveDown size={12} /></button>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -278,6 +281,7 @@ export default function Dashboard({ plan, onPlanUpdate, onViewInsights }: Props)
         })}
       </div>
 
+      {/* Delay Modal */}
       {delayTask && (
         <div className="modal-overlay" onClick={() => setDelayTask(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -285,11 +289,7 @@ export default function Dashboard({ plan, onPlanUpdate, onViewInsights }: Props)
             <p>"{delayTask.title}" 为什么延迟了？</p>
             <div className="delay-reasons">
               {DELAY_REASONS.map(reason => (
-                <button
-                  key={reason}
-                  className="btn btn-outline reason-btn"
-                  onClick={() => applyStatusChange(delayTask, 'delayed', reason)}
-                >
+                <button key={reason} className="btn btn-outline reason-btn" onClick={() => applyStatusChange(delayTask, 'delayed', reason)}>
                   {reason}
                 </button>
               ))}
@@ -299,16 +299,33 @@ export default function Dashboard({ plan, onPlanUpdate, onViewInsights }: Props)
         </div>
       )}
 
+      {/* Daily Log Modal */}
       {showDailyLog && <DailyLogModal date={today} existingLog={todayLog} onSave={handleDailyLogSave} onClose={() => setShowDailyLog(false)} />}
+
+      {/* Add Task Modal */}
+      {showAddTask && (
+        <AddTaskModal
+          week={showAddTask.week}
+          day={showAddTask.day}
+          onSave={task => handleAddTask(showAddTask.week, showAddTask.day, task)}
+          onClose={() => setShowAddTask(null)}
+        />
+      )}
+
+      {/* Edit Task Modal */}
+      {editingTask && (
+        <EditTaskModal
+          task={editingTask}
+          onSave={updates => handleEditTask(editingTask, updates)}
+          onClose={() => setEditingTask(null)}
+        />
+      )}
     </div>
   );
 }
 
 function DailyLogModal({ date, existingLog, onSave, onClose }: {
-  date: string;
-  existingLog: DailyLog | null;
-  onSave: (log: DailyLog) => void;
-  onClose: () => void;
+  date: string; existingLog: DailyLog | null; onSave: (log: DailyLog) => void; onClose: () => void;
 }) {
   const [energy, setEnergy] = useState(existingLog?.energyLevel || 5);
   const [focus, setFocus] = useState(existingLog?.focusLevel || 5);
@@ -318,11 +335,7 @@ function DailyLogModal({ date, existingLog, onSave, onClose }: {
 
   const handleSave = () => {
     onSave({
-      date,
-      energyLevel: energy,
-      focusLevel: focus,
-      mood,
-      notes,
+      date, energyLevel: energy, focusLevel: focus, mood, notes,
       distractions: distractions.split(/[,，]/).map(s => s.trim()).filter(Boolean),
       completedTaskIds: existingLog?.completedTaskIds || [],
     });
@@ -335,57 +348,98 @@ function DailyLogModal({ date, existingLog, onSave, onClose }: {
       <div className="modal daily-log-modal" onClick={e => e.stopPropagation()}>
         <h3>每日状态记录</h3>
         <p className="modal-date">{date}</p>
+        <div className="log-field"><label>精力水平 ({energy}/10)</label><input type="range" min={1} max={10} value={energy} onChange={e => setEnergy(Number(e.target.value))} /></div>
+        <div className="log-field"><label>专注度 ({focus}/10)</label><input type="range" min={1} max={10} value={focus} onChange={e => setFocus(Number(e.target.value))} /></div>
+        <div className="log-field"><label>心情状态</label><div className="mood-selector">{moods.map(m => <button key={m} className={`btn btn-sm ${mood === m ? 'btn-primary' : 'btn-outline'}`} onClick={() => setMood(m)}>{m}</button>)}</div></div>
+        <div className="log-field"><label>分心因素</label><input type="text" value={distractions} onChange={e => setDistractions(e.target.value)} placeholder="手机、社交媒体..." className="input-text" /></div>
+        <div className="log-field"><label>备注</label><textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="今天学习的感受..." className="input-text" rows={2} /></div>
+        <div className="modal-actions"><button className="btn btn-ghost" onClick={onClose}>取消</button><button className="btn btn-primary" onClick={handleSave}>保存</button></div>
+      </div>
+    </div>
+  );
+}
 
-        <div className="log-field">
-          <label>精力水平 ({energy}/10)</label>
-          <input type="range" min={1} max={10} value={energy} onChange={e => setEnergy(Number(e.target.value))} />
-        </div>
+function AddTaskModal({ week, day, onSave, onClose }: {
+  week: number; day: number; onSave: (task: Partial<Task>) => void; onClose: () => void;
+}) {
+  const [title, setTitle] = useState('');
+  const [desc, setDesc] = useState('');
+  const [minutes, setMinutes] = useState(30);
+  const [difficulty, setDifficulty] = useState(3);
+  const [category, setCategory] = useState('自定义');
 
-        <div className="log-field">
-          <label>专注度 ({focus}/10)</label>
-          <input type="range" min={1} max={10} value={focus} onChange={e => setFocus(Number(e.target.value))} />
-        </div>
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <h3>添加自定义任务</h3>
+        <p>第{week}周 {WEEKDAYS[day - 1]}</p>
 
-        <div className="log-field">
-          <label>心情状态</label>
-          <div className="mood-selector">
-            {moods.map(m => (
-              <button
-                key={m}
-                className={`btn btn-sm ${mood === m ? 'btn-primary' : 'btn-outline'}`}
-                onClick={() => setMood(m)}
-              >
-                {m}
-              </button>
-            ))}
+        <div className="log-field"><label>任务名称</label><input type="text" className="input-text" value={title} onChange={e => setTitle(e.target.value)} placeholder="输入任务名称" autoFocus /></div>
+        <div className="log-field"><label>描述</label><textarea className="input-text" value={desc} onChange={e => setDesc(e.target.value)} placeholder="任务描述（可选）" rows={2} /></div>
+
+        <div className="form-row">
+          <div className="log-field" style={{ flex: 1 }}>
+            <label>预估时间（分钟）</label>
+            <input type="number" className="input-text" value={minutes} onChange={e => setMinutes(Number(e.target.value))} min={5} max={240} />
+          </div>
+          <div className="log-field" style={{ flex: 1 }}>
+            <label>难度 (1-5)</label>
+            <div className="diff-selector">
+              {[1, 2, 3, 4, 5].map(d => (
+                <button key={d} className={`btn btn-sm ${difficulty === d ? 'btn-primary' : 'btn-outline'}`} onClick={() => setDifficulty(d)}>{'★'.repeat(d)}</button>
+              ))}
+            </div>
           </div>
         </div>
 
-        <div className="log-field">
-          <label>分心因素</label>
-          <input
-            type="text"
-            value={distractions}
-            onChange={e => setDistractions(e.target.value)}
-            placeholder="例如：手机、社交媒体、噪音"
-            className="input-text"
-          />
-        </div>
-
-        <div className="log-field">
-          <label>备注</label>
-          <textarea
-            value={notes}
-            onChange={e => setNotes(e.target.value)}
-            placeholder="今天学习的感受、遇到的困难..."
-            className="input-text"
-            rows={2}
-          />
-        </div>
+        <div className="log-field"><label>分类</label><div className="mood-selector">{CATEGORIES.map(c => <button key={c} className={`btn btn-sm ${category === c ? 'btn-primary' : 'btn-outline'}`} onClick={() => setCategory(c)}>{c}</button>)}</div></div>
 
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onClose}>取消</button>
-          <button className="btn btn-primary" onClick={handleSave}>保存</button>
+          <button className="btn btn-primary" onClick={() => title.trim() && onSave({ title: title.trim(), description: desc.trim(), estimatedMinutes: minutes, difficulty, category })} disabled={!title.trim()}>添加</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditTaskModal({ task, onSave, onClose }: {
+  task: Task; onSave: (updates: Partial<Task>) => void; onClose: () => void;
+}) {
+  const [title, setTitle] = useState(task.title);
+  const [desc, setDesc] = useState(task.description);
+  const [minutes, setMinutes] = useState(task.estimatedMinutes);
+  const [difficulty, setDifficulty] = useState(task.difficulty);
+  const [category, setCategory] = useState(task.category);
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <h3>编辑任务</h3>
+
+        <div className="log-field"><label>任务名称</label><input type="text" className="input-text" value={title} onChange={e => setTitle(e.target.value)} autoFocus /></div>
+        <div className="log-field"><label>描述</label><textarea className="input-text" value={desc} onChange={e => setDesc(e.target.value)} rows={2} /></div>
+
+        <div className="form-row">
+          <div className="log-field" style={{ flex: 1 }}>
+            <label>预估时间（分钟）</label>
+            <input type="number" className="input-text" value={minutes} onChange={e => setMinutes(Number(e.target.value))} min={5} max={240} />
+          </div>
+          <div className="log-field" style={{ flex: 1 }}>
+            <label>难度 (1-5)</label>
+            <div className="diff-selector">
+              {[1, 2, 3, 4, 5].map(d => (
+                <button key={d} className={`btn btn-sm ${difficulty === d ? 'btn-primary' : 'btn-outline'}`} onClick={() => setDifficulty(d)}>{'★'.repeat(d)}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="log-field"><label>分类</label><div className="mood-selector">{CATEGORIES.map(c => <button key={c} className={`btn btn-sm ${category === c ? 'btn-primary' : 'btn-outline'}`} onClick={() => setCategory(c)}>{c}</button>)}</div></div>
+
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onClose}>取消</button>
+          <button className="btn btn-primary" onClick={() => { onSave({ title: title.trim(), description: desc.trim(), estimatedMinutes: minutes, difficulty, category }); onClose(); }}>保存</button>
         </div>
       </div>
     </div>

@@ -24,6 +24,7 @@ export interface Task {
   completedAt?: string;
   delayedReason?: string;
   order: number;
+  isCustom?: boolean;
 }
 
 export interface WeekPlan {
@@ -35,6 +36,7 @@ export interface WeekPlan {
 
 export interface Plan {
   id: string;
+  name: string;
   profile: UserProfile;
   weeks: WeekPlan[];
   createdAt: string;
@@ -77,4 +79,19 @@ export interface AppState {
   plan: Plan | null;
   dailyLogs: DailyLog[];
   taskHistory: { taskId: string; fromStatus: TaskStatus; toStatus: TaskStatus; timestamp: string }[];
+}
+
+export interface UserAccount {
+  id: string;
+  username: string;
+  passwordHash: string;
+  plans: Plan[];
+  dailyLogs: DailyLog[];
+  taskHistory: { taskId: string; fromStatus: TaskStatus; toStatus: TaskStatus; timestamp: string }[];
+  createdAt: string;
+}
+
+export interface AppData {
+  users: UserAccount[];
+  currentUserId: string | null;
 }

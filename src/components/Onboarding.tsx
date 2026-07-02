@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import type { UserProfile } from '../types';
 import { generatePlan } from '../engine/planGenerator';
-import { savePlan } from '../data/store';
-import { Target, Clock, BarChart3, BookOpen, AlertTriangle } from 'lucide-react';
+import { addPlan } from '../data/store';
+import { Target, Clock, BarChart3, BookOpen, AlertTriangle, FileText } from 'lucide-react';
 
 interface Props {
   onComplete: () => void;
@@ -15,6 +15,14 @@ const DIMENSIONS = [
     icon: Target,
     placeholder: '例如：通过PMP认证、掌握Python数据分析、雅思7分',
     hint: '用逗号分隔多个子目标，系统会自动拆解',
+    type: 'text' as const,
+  },
+  {
+    key: 'planName' as const,
+    label: '计划名称',
+    icon: FileText,
+    placeholder: '例如：2024考研复习、Java学习冲刺',
+    hint: '给你的计划起个名字，方便区分多个计划',
     type: 'text' as const,
   },
   {
@@ -33,7 +41,7 @@ const DIMENSIONS = [
     label: '难度承受力（1-10）',
     icon: BarChart3,
     placeholder: '5',
-    hint: '1=只接受简单任务，10=喜欢高难度挑战。系统会据此调整任务分配',
+    hint: '1=只接受简单任务，10=喜欢高难度挑战',
     type: 'range' as const,
     min: 1,
     max: 10,
@@ -57,15 +65,16 @@ const DIMENSIONS = [
     key: 'constraints' as const,
     label: '限制条件与备注',
     icon: AlertTriangle,
-    placeholder: '例如：周末只能学习1小时、周三有固定会议、需要预留复习时间',
+    placeholder: '例如：周末只能学习1小时、周三有固定会议',
     hint: '任何可能影响计划的约束条件',
     type: 'text' as const,
   },
 ];
 
 export default function Onboarding({ onComplete }: Props) {
-  const [profile, setProfile] = useState<UserProfile>({
+  const [profile, setProfile] = useState<UserProfile & { planName: string }>({
     goal: '',
+    planName: '',
     timePerDay: 60,
     difficultyTolerance: 5,
     learningStyle: 'mixed',
@@ -86,7 +95,8 @@ export default function Onboarding({ onComplete }: Props) {
       setIsGenerating(true);
       setTimeout(() => {
         const plan = generatePlan(profile);
-        savePlan(plan);
+        plan.name = profile.planName || profile.goal.slice(0, 20);
+        addPlan(plan);
         setIsGenerating(false);
         onComplete();
       }, 1500);
@@ -99,6 +109,7 @@ export default function Onboarding({ onComplete }: Props) {
 
   const canNext = () => {
     if (dim.key === 'goal') return profile.goal.trim().length > 0;
+    if (dim.key === 'planName') return profile.planName.trim().length > 0;
     return true;
   };
 
@@ -139,7 +150,7 @@ export default function Onboarding({ onComplete }: Props) {
           {dim.type === 'text' && (
             <textarea
               className="input-text"
-              value={profile[dim.key] as string}
+              value={String(profile[dim.key] || '')}
               onChange={e => setProfile({ ...profile, [dim.key]: e.target.value })}
               placeholder={dim.placeholder}
               rows={3}

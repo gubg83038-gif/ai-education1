@@ -125,6 +125,7 @@ export function generatePlan(profile: UserProfile): Plan {
 
   return {
     id: `plan_${Date.now()}`,
+    name: profile.goal.slice(0, 20),
     profile,
     weeks,
     createdAt: new Date().toISOString(),

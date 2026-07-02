@@ -1,53 +1,77 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import type { Plan } from './types';
-import { loadState } from './data/store';
-import Onboarding from './components/Onboarding';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { getPlan } from './data/store';
+import Login from './components/Login';
+import PlanList from './components/PlanList';
 import Dashboard from './components/Dashboard';
 import Insights from './components/Insights';
 
-type Page = 'onboarding' | 'dashboard' | 'insights';
+type Page = 'plans' | 'dashboard' | 'insights';
 
-export default function App() {
-  const [page, setPage] = useState<Page>('onboarding');
-  const [plan, setPlan] = useState<Plan | null>(null);
+function AppContent() {
+  const { user, loading } = useAuth();
+  const [page, setPage] = useState<Page>('plans');
+  const [activePlanId, setActivePlanId] = useState<string | null>(null);
+  const [activePlan, setActivePlan] = useState<Plan | null>(null);
+  const refresh = useCallback(() => {}, []);
 
-  useEffect(() => {
-    const state = loadState();
-    if (state.plan) {
-      setPlan(state.plan);
+  const handleSelectPlan = useCallback((planId: string) => {
+    const p = getPlan(planId);
+    if (p) {
+      setActivePlan(p);
+      setActivePlanId(planId);
       setPage('dashboard');
     }
   }, []);
 
-  const handleOnboardingComplete = useCallback(() => {
-    const state = loadState();
-    if (state.plan) {
-      setPlan(state.plan);
-      setPage('dashboard');
-    }
+  const handleBackToPlans = useCallback(() => {
+    setPage('plans');
+    setActivePlanId(null);
+    refresh();
+  }, [refresh]);
+
+  const handleViewInsights = useCallback(() => {
+    setPage('insights');
   }, []);
 
-  const handlePlanUpdate = useCallback((updatedPlan: Plan) => {
-    setPlan(updatedPlan);
-  }, []);
-
-  if (page === 'onboarding') {
-    return <Onboarding onComplete={handleOnboardingComplete} />;
+  if (loading) {
+    return (
+      <div className="onboarding generating">
+        <div className="generating-content">
+          <div className="spinner" />
+          <h2>正在加载...</h2>
+        </div>
+      </div>
+    );
   }
 
-  if (page === 'insights' && plan) {
-    return <Insights plan={plan} onBack={() => setPage('dashboard')} />;
+  if (!user) {
+    return <Login />;
   }
 
-  if (plan) {
+  if (page === 'insights' && activePlan) {
+    return <Insights plan={activePlan} onBack={() => setPage('dashboard')} />;
+  }
+
+  if (page === 'dashboard' && activePlan) {
     return (
       <Dashboard
-        plan={plan}
-        onPlanUpdate={handlePlanUpdate}
-        onViewInsights={() => setPage('insights')}
+        planId={activePlanId!}
+        plan={activePlan}
+        onBack={handleBackToPlans}
+        onViewInsights={handleViewInsights}
       />
     );
   }
 
-  return <Onboarding onComplete={handleOnboardingComplete} />;
+  return <PlanList onSelectPlan={handleSelectPlan} />;
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  );
 }

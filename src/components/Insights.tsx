@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import type { Plan, InsightReport } from '../types';
 import { generateInsights } from '../engine/insights';
-import { loadState } from '../data/store';
+import { getDailyLogs } from '../data/store';
 import {
   TrendingUp, Target, AlertTriangle, Lightbulb, Brain,
   Clock, Zap, Star, Activity, ChevronRight,
@@ -13,7 +13,7 @@ interface Props {
 }
 
 export default function Insights({ plan, onBack }: Props) {
-  const { dailyLogs } = loadState();
+  const dailyLogs = getDailyLogs();
   const report = useMemo(() => generateInsights(plan, dailyLogs), [plan, dailyLogs]);
 
   return (
