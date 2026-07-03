@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import type { Plan, Task, TaskStatus, DailyLog } from '../types';
 import { adjustPlan } from '../engine/adjuster';
 import { updateTaskStatus, saveDailyLog, getDailyLog, updatePlan, addTaskToPlan, updateTaskInPlan, deleteTaskFromPlan } from '../data/store';
-import { Check, Clock, SkipForward, AlertCircle, ChevronRight, ChevronLeft, BarChart3, Zap, Battery, Brain, Plus, Trash2, Edit3, ArrowLeft, MoveUp, MoveDown, Sparkles } from 'lucide-react';
+import { Check, Clock, SkipForward, AlertCircle, ChevronRight, ChevronLeft, BarChart3, Zap, Battery, Brain, Plus, Trash2, Edit3, ArrowLeft, MoveUp, MoveDown, Sparkles, X } from 'lucide-react';
 import { CoachReview, ProcrastinationWarning, TodayPreview } from './Coach';
 
 interface Props {
@@ -34,6 +34,12 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const [recentlyChanged, setRecentlyChanged] = useState<Task[]>([]);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'info'; week: number; day: number } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'info' = 'info', week?: number, day?: number) => {
+    setToast({ message, type, week: week || 0, day: day || 0 });
+    setTimeout(() => setToast(null), 4000);
+  };
 
   const today = new Date().toISOString().split('T')[0];
   const todayLog = getDailyLog(today);
@@ -133,8 +139,73 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
     setShowDailyLog(false);
   };
 
+  const handleCoachAction = (action: string) => {
+    const newPlan = structuredClone(plan);
+    const allTasks = newPlan.weeks.flatMap(w => w.tasks);
+    const today = new Date().toISOString().split('T')[0];
+    const currentWeekTasks = allTasks.filter(t => t.date === today);
+    const w = currentWeekTasks[0]?.week || activeWeek;
+    const d = currentWeekTasks[0]?.day || (new Date().getDay() || 7);
+
+    if (action === 'upgrade') {
+      const pending = allTasks.filter(t => t.status === 'pending');
+      const count = Math.min(3, pending.length);
+      pending.slice(0, count).forEach(t => {
+        t.difficulty = Math.min(5, t.difficulty + 1);
+        t.estimatedMinutes = Math.round(t.estimatedMinutes * 1.1);
+      });
+      updatePlan(planId, newPlan);
+      setPlan(newPlan);
+      showToast(`第${w}周 周${d} · 已提升 ${count} 个任务难度，挑战加速！`, 'success', w, d);
+    } else if (action === 'split') {
+      const delayed = allTasks.filter(t => t.status === 'delayed');
+      const task = delayed[0];
+      if (task) {
+        task.status = 'pending';
+        const microTask: Task = {
+          id: `micro_${Date.now()}`,
+          title: '微行动: ' + task.title.slice(0, 15),
+          description: '只需2分钟: ' + task.description.slice(0, 30),
+          estimatedMinutes: 2,
+          difficulty: 1,
+          week: task.week,
+          day: task.day,
+          date: task.date,
+          status: 'pending',
+          category: task.category,
+          order: task.order + 1,
+          isCustom: true,
+          delayedReason: undefined,
+        };
+        const week = newPlan.weeks.find(w => w.weekNumber === task.week);
+        week?.tasks.push(microTask);
+        updatePlan(planId, newPlan);
+        setPlan(newPlan);
+        showToast(`第${task.week}周 周${task.day} · 已恢复"${task.title.slice(0, 10)}"并新增微行动`, 'success', task.week, task.day);
+      }
+    } else if (action === 'reduce') {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const todayTasks = allTasks.filter(t => t.date === todayStr && t.status === 'pending');
+      const toSkip = todayTasks.filter(t => t.difficulty >= 3).slice(Math.floor(todayTasks.length / 2));
+      toSkip.forEach(t => { t.status = 'skipped'; });
+      updatePlan(planId, newPlan);
+      setPlan(newPlan);
+      showToast(`第${w}周 周${d} · 已跳过 ${toSkip.length} 个高难度任务，今天轻松点`, 'info', w, d);
+    }
+  };
+
   return (
     <div className="dashboard">
+      {toast && (
+        <div className={`toast toast-${toast.type}`} onClick={() => setToast(null)}>
+          <Sparkles size={14} />
+          <div className="toast-content">
+            <span>{toast.message}</span>
+          </div>
+          <button className="toast-close" onClick={e => { e.stopPropagation(); setToast(null); }}><X size={12} /></button>
+        </div>
+      )}
+
       <header className="dashboard-header">
         <div className="header-info">
           <button className="btn btn-ghost btn-back" onClick={onBack}>
@@ -159,7 +230,7 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
         </div>
       </header>
 
-      <CoachReview plan={plan} recentlyChanged={recentlyChanged} />
+      <CoachReview plan={plan} recentlyChanged={recentlyChanged} onAction={handleCoachAction} />
       <ProcrastinationWarning plan={plan} />
       <TodayPreview plan={plan} />
 

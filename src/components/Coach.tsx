@@ -5,9 +5,10 @@ import { Sparkles, ArrowRight, Brain, AlertTriangle } from 'lucide-react';
 interface CoachProps {
   plan: Plan;
   recentlyChanged: Task[];
+  onAction: (action: string) => void;
 }
 
-export function CoachReview({ plan, recentlyChanged }: CoachProps) {
+export function CoachReview({ plan, recentlyChanged, onAction }: CoachProps) {
   const allTasks = plan.weeks.flatMap(w => w.tasks);
   const completedToday = recentlyChanged.filter(t => t.status === 'completed');
   const delayedToday = recentlyChanged.filter(t => t.status === 'delayed');
@@ -59,7 +60,7 @@ export function CoachReview({ plan, recentlyChanged }: CoachProps) {
       {suggestions.length > 0 && (
         <div className="coach-actions">
           {suggestions.map((s, i) => (
-            <button key={i} className="coach-btn">
+            <button key={i} className="coach-btn" onClick={() => onAction(s.action)}>
               <Sparkles size={12} /> {s.label}
             </button>
           ))}
