@@ -32,8 +32,12 @@ function AppContent() {
   }, [refresh]);
 
   const handleViewInsights = useCallback(() => {
+    if (activePlanId) {
+      const p = getPlan(activePlanId);
+      if (p) setActivePlan(p);
+    }
     setPage('insights');
-  }, []);
+  }, [activePlanId]);
 
   if (loading) {
     return (
@@ -51,7 +55,11 @@ function AppContent() {
   }
 
   if (page === 'insights' && activePlan) {
-    return <Insights plan={activePlan} onBack={() => setPage('dashboard')} />;
+    return <Insights plan={activePlan} onBack={() => {
+      const refreshed = activePlanId ? getPlan(activePlanId) : null;
+      if (refreshed) setActivePlan(refreshed);
+      setPage('dashboard');
+    }} />;
   }
 
   if (page === 'dashboard' && activePlan) {
