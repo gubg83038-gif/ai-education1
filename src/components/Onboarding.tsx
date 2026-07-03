@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import type { UserProfile, LearningStyle } from '../types';
-import { generatePlan } from '../engine/planGenerator';
-import { addPlan } from '../data/store';
 import { Target, Clock, BarChart3, BookOpen, AlertTriangle, FileText } from 'lucide-react';
+import PlanOptionsSelector from './PlanOptionsSelector';
 
 interface Props {
   onComplete: () => void;
@@ -84,7 +83,7 @@ export default function Onboarding({ onComplete, onCancel }: Props) {
   });
 
   const [step, setStep] = useState(0);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [showOptions, setShowOptions] = useState(false);
 
   const dim = DIMENSIONS[step];
   const Icon = dim.icon;
@@ -93,14 +92,7 @@ export default function Onboarding({ onComplete, onCancel }: Props) {
     if (step < DIMENSIONS.length - 1) {
       setStep(step + 1);
     } else {
-      setIsGenerating(true);
-      setTimeout(() => {
-        const plan = generatePlan(profile);
-        plan.name = profile.planName || profile.goal.slice(0, 20);
-        addPlan(plan);
-        setIsGenerating(false);
-        onComplete();
-      }, 1500);
+      setShowOptions(true);
     }
   };
 
@@ -115,21 +107,13 @@ export default function Onboarding({ onComplete, onCancel }: Props) {
     return true;
   };
 
-  if (isGenerating) {
+  if (showOptions) {
     return (
-      <div className="onboarding generating">
-        <div className="generating-content">
-          <div className="spinner" />
-          <h2>AI 正在为你生成专属学习计划...</h2>
-          <p>分析目标结构 · 匹配学习风格 · 优化任务分配</p>
-          <div className="progress-dots">
-            <span className="dot active" />
-            <span className="dot active" />
-            <span className="dot" />
-            <span className="dot" />
-          </div>
-        </div>
-      </div>
+      <PlanOptionsSelector
+        profile={profile}
+        onBack={() => setShowOptions(false)}
+        onComplete={onComplete}
+      />
     );
   }
 

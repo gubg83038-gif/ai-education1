@@ -6,6 +6,7 @@ import {
   TrendingUp, Target, AlertTriangle, Lightbulb, Brain,
   Clock, Zap, Star, Activity, ChevronRight,
 } from 'lucide-react';
+import { GrowthMetrics } from './Coach';
 
 interface Props {
   plan: Plan;
@@ -33,6 +34,7 @@ export default function Insights({ plan, onBack }: Props) {
         <DifficultyCard report={report} />
         <ProcrastinationCard report={report} />
         <RecommendationsCard report={report} />
+        <GrowthMetrics plan={plan} />
       </div>
     </div>
   );

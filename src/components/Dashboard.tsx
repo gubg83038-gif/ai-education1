@@ -2,7 +2,8 @@ import { useState, useMemo } from 'react';
 import type { Plan, Task, TaskStatus, DailyLog } from '../types';
 import { adjustPlan } from '../engine/adjuster';
 import { updateTaskStatus, saveDailyLog, getDailyLog, updatePlan, addTaskToPlan, updateTaskInPlan, deleteTaskFromPlan } from '../data/store';
-import { Check, Clock, SkipForward, AlertCircle, ChevronRight, ChevronLeft, BarChart3, Zap, Battery, Brain, Plus, Trash2, Edit3, ArrowLeft, MoveUp, MoveDown } from 'lucide-react';
+import { Check, Clock, SkipForward, AlertCircle, ChevronRight, ChevronLeft, BarChart3, Zap, Battery, Brain, Plus, Trash2, Edit3, ArrowLeft, MoveUp, MoveDown, Sparkles } from 'lucide-react';
+import { CoachReview, ProcrastinationWarning, TodayPreview } from './Coach';
 
 interface Props {
   planId: string;
@@ -31,6 +32,8 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
   const [showDailyLog, setShowDailyLog] = useState(false);
   const [showAddTask, setShowAddTask] = useState<{ week: number; day: number } | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+
+  const [recentlyChanged, setRecentlyChanged] = useState<Task[]>([]);
 
   const today = new Date().toISOString().split('T')[0];
   const todayLog = getDailyLog(today);
@@ -74,6 +77,7 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
     updateTaskStatus(planId, task.id, newStatus, reason);
     savePlan(updatedPlan);
     setDelayTask(null);
+    setRecentlyChanged(prev => [...prev, { ...task, status: newStatus }].slice(-10));
   };
 
   const handleAddTask = (week: number, day: number, taskData: Partial<Task>) => {
@@ -154,6 +158,10 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
           </button>
         </div>
       </header>
+
+      <CoachReview plan={plan} recentlyChanged={recentlyChanged} />
+      <ProcrastinationWarning plan={plan} />
+      <TodayPreview plan={plan} />
 
       <div className="week-navigator">
         <button className="btn btn-icon" onClick={() => setActiveWeek(Math.max(1, activeWeek - 1))} disabled={activeWeek === 1}>
@@ -362,11 +370,43 @@ function DailyLogModal({ date, existingLog, onSave, onClose }: {
 function AddTaskModal({ week, day, onSave, onClose }: {
   week: number; day: number; onSave: (task: Partial<Task>) => void; onClose: () => void;
 }) {
+  const [nlInput, setNlInput] = useState('');
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
   const [minutes, setMinutes] = useState(30);
   const [difficulty, setDifficulty] = useState(3);
   const [category, setCategory] = useState('自定义');
+  const [useAdvanced, setUseAdvanced] = useState(false);
+
+  const parseNaturalLanguage = (input: string) => {
+    const trimmed = input.trim();
+    if (!trimmed) return;
+
+    const timeMatch = trimmed.match(/(\d+)\s*(分钟|min|小时|h)/i);
+    const diffMatch = trimmed.match(/难度\s*(\d)/i) || trimmed.match(/(\d)星/i);
+    const catMatch = trimmed.match(/[（(](.+?)[）)]/);
+
+    const cleanTitle = trimmed
+      .replace(/(\d+)\s*(分钟|min|小时|h)/gi, '')
+      .replace(/难度\s*\d/gi, '')
+      .replace(/[（(].+?[）)]/g, '')
+      .trim();
+
+    setTitle(cleanTitle || trimmed);
+    if (timeMatch) {
+      const val = parseInt(timeMatch[1]);
+      setMinutes(timeMatch[2]?.includes('小时') || timeMatch[2] === 'h' ? val * 60 : val);
+    }
+    if (diffMatch) setDifficulty(Math.min(5, Math.max(1, parseInt(diffMatch[1]))));
+    if (catMatch) setCategory(catMatch[1]);
+  };
+
+  const handleNlSubmit = () => {
+    if (nlInput.trim()) parseNaturalLanguage(nlInput);
+    setUseAdvanced(true);
+  };
+
+  const quickExamples = ['复习课程 30分钟', '阅读3章 难度3', '练习算法题 1小时', '整理笔记 15分钟'];
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -374,29 +414,49 @@ function AddTaskModal({ week, day, onSave, onClose }: {
         <h3>添加自定义任务</h3>
         <p>第{week}周 {WEEKDAYS[day - 1]}</p>
 
-        <div className="log-field"><label>任务名称</label><input type="text" className="input-text" value={title} onChange={e => setTitle(e.target.value)} placeholder="输入任务名称" autoFocus /></div>
-        <div className="log-field"><label>描述</label><textarea className="input-text" value={desc} onChange={e => setDesc(e.target.value)} placeholder="任务描述（可选）" rows={2} /></div>
-
-        <div className="form-row">
-          <div className="log-field" style={{ flex: 1 }}>
-            <label>预估时间（分钟）</label>
-            <input type="number" className="input-text" value={minutes} onChange={e => setMinutes(Number(e.target.value))} min={5} max={240} />
+        <div className="nl-input-wrapper">
+          <label className="log-field-label">快速输入（可选）</label>
+          <input
+            type="text"
+            className="input-text"
+            value={nlInput}
+            onChange={e => setNlInput(e.target.value)}
+            placeholder="例如：复习数学 30分钟 难度3（练习）"
+            onKeyDown={e => e.key === 'Enter' && handleNlSubmit()}
+            autoFocus
+          />
+          <div className="nl-input-hint">支持：任务名 + 时间 + 难度N + (分类)</div>
+          <div className="nl-examples">
+            {quickExamples.map(ex => (
+              <button key={ex} className="nl-example" onClick={() => { setNlInput(ex); parseNaturalLanguage(ex); }}>
+                {ex}
+              </button>
+            ))}
           </div>
-          <div className="log-field" style={{ flex: 1 }}>
-            <label>难度 (1-5)</label>
-            <div className="diff-selector">
-              {[1, 2, 3, 4, 5].map(d => (
-                <button key={d} className={`btn btn-sm ${difficulty === d ? 'btn-primary' : 'btn-outline'}`} onClick={() => setDifficulty(d)}>{'★'.repeat(d)}</button>
-              ))}
-            </div>
-          </div>
+          {nlInput.trim() && !useAdvanced && (
+            <button className="btn btn-primary btn-sm" style={{ marginTop: 8 }} onClick={handleNlSubmit}>
+              <Sparkles size={12} /> 智能解析
+            </button>
+          )}
         </div>
 
-        <div className="log-field"><label>分类</label><div className="mood-selector">{CATEGORIES.map(c => <button key={c} className={`btn btn-sm ${category === c ? 'btn-primary' : 'btn-outline'}`} onClick={() => setCategory(c)}>{c}</button>)}</div></div>
+        {(useAdvanced || !nlInput.trim()) && (
+          <>
+            <div className="log-field"><label>任务名称</label><input type="text" className="input-text" value={title} onChange={e => setTitle(e.target.value)} placeholder="输入任务名称" /></div>
+            <div className="log-field"><label>描述</label><textarea className="input-text" value={desc} onChange={e => setDesc(e.target.value)} placeholder="任务描述（可选）" rows={2} /></div>
+            <div className="form-row">
+              <div className="log-field" style={{ flex: 1 }}><label>预估时间（分钟）</label><input type="number" className="input-text" value={minutes} onChange={e => setMinutes(Number(e.target.value))} min={5} max={240} /></div>
+              <div className="log-field" style={{ flex: 1 }}><label>难度 (1-5)</label><div className="diff-selector">{[1, 2, 3, 4, 5].map(d => <button key={d} className={`btn btn-sm ${difficulty === d ? 'btn-primary' : 'btn-outline'}`} onClick={() => setDifficulty(d)}>{'★'.repeat(d)}</button>)}</div></div>
+            </div>
+            <div className="log-field"><label>分类</label><div className="mood-selector">{CATEGORIES.map(c => <button key={c} className={`btn btn-sm ${category === c ? 'btn-primary' : 'btn-outline'}`} onClick={() => setCategory(c)}>{c}</button>)}</div></div>
+          </>
+        )}
 
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onClose}>取消</button>
-          <button className="btn btn-primary" onClick={() => title.trim() && onSave({ title: title.trim(), description: desc.trim(), estimatedMinutes: minutes, difficulty, category })} disabled={!title.trim()}>添加</button>
+          <button className="btn btn-primary" onClick={() => title.trim() && onSave({ title: title.trim(), description: desc.trim(), estimatedMinutes: minutes, difficulty, category })} disabled={!title.trim()}>
+            添加
+          </button>
         </div>
       </div>
     </div>
