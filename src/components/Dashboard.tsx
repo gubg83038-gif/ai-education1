@@ -21,7 +21,20 @@ const STATUS_CONFIG: Record<TaskStatus, { icon: React.ReactNode; label: string; 
 };
 
 const DELAY_REASONS = ['时间不够', '难度太大', '精力不足', '有更紧急的事', '缺乏动力', '需要更多准备'];
-const WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+const WEEKDAY_NAMES = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+function getWeekdayLabel(dateStr: string): string {
+  if (!dateStr) return '';
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  return WEEKDAY_NAMES[date.getDay()];
+}
+
+function computeDate(startDate: string, offsetDays: number): string {
+  const [y, m, d] = startDate.split('-').map(Number);
+  const date = new Date(y, m - 1, d + offsetDays);
+  return date.toISOString().split('T')[0];
+}
 const CATEGORIES = ['阅读', '练习', '实践', '观看', '整理', '输出', '复习', '休息', '自定义'];
 
 export default function Dashboard({ planId, plan: initialPlan, onBack, onViewInsights }: Props) {
@@ -173,7 +186,10 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
     if (direction === 'prevDay') { newDay = task.day - 1; if (newDay < 1) { newDay = 7; newWeek = task.week - 1; } }
     if (direction === 'nextDay') { newDay = task.day + 1; if (newDay > 7) { newDay = 1; newWeek = task.week + 1; } }
     if (newWeek < 1 || newWeek > 4) return;
-    handleEditTask(task, { week: newWeek, day: newDay });
+
+    const weekTasks = plan.weeks.find(w => w.weekNumber === newWeek)?.tasks;
+    const newDate = weekTasks?.find(t => t.day === newDay)?.date || task.date;
+    handleEditTask(task, { week: newWeek, day: newDay, date: newDate });
   };
 
   const toggleDay = (day: number) => {
@@ -317,19 +333,20 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
       </div>
 
       <div className="tasks-container">
-        {WEEKDAYS.map((dayName, idx) => {
+        {Array.from({ length: 7 }, (_, idx) => {
           const day = idx + 1;
           const dayTasks = tasksByDay[day] || [];
-          const dateStr = dayTasks[0]?.date || '';
+          const dateStr = dayTasks[0]?.date || computeDate(plan.profile.startDate, (activeWeek - 1) * 7 + idx);
           const isToday = dateStr === today;
           const isExpanded = expandedDays.has(day);
           const dayCompleted = dayTasks.filter(t => t.status === 'completed').length;
+          const dayLabel = getWeekdayLabel(dateStr);
 
           return (
             <div key={day} className={`day-group ${isToday ? 'today' : ''}`}>
               <div className="day-header" onClick={() => toggleDay(day)}>
                 <div className="day-info">
-                  <span className="day-name">{dayName}</span>
+                  <span className="day-name">{dayLabel}</span>
                   <span className="day-date">{dateStr}</span>
                   {isToday && <span className="today-badge">今天</span>}
                 </div>
@@ -372,7 +389,7 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
                       showToast={showToast}
                     />
                   ) : (
-                    dayTasks.map((task, taskIdx) => (
+                    dayTasks.map((task) => (
                       <div key={task.id} className={`task-card ${task.status} ${task.isCustom ? 'custom-task' : ''}`}>
                         <div className="task-main">
                           <div className="task-info">
@@ -420,7 +437,7 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
                             <div className="task-tools">
                               <button className="btn btn-ghost btn-sm" onClick={() => setEditingTask(task)} title="编辑"><Edit3 size={12} /></button>
                               <button className="btn btn-ghost btn-sm" onClick={() => handleDeleteTask(task.id)} title="删除"><Trash2 size={12} /></button>
-                              {taskIdx > 0 && <button className="btn btn-ghost btn-sm" onClick={() => handleMoveTask(task, 'prevDay')} title="移到前一天"><MoveUp size={12} /></button>}
+                              <button className="btn btn-ghost btn-sm" onClick={() => handleMoveTask(task, 'prevDay')} title="移到前一天"><MoveUp size={12} /></button>
                               <button className="btn btn-ghost btn-sm" onClick={() => handleMoveTask(task, 'nextDay')} title="移到后一天"><MoveDown size={12} /></button>
                             </div>
                           </div>
@@ -461,6 +478,7 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
         <AddTaskModal
           week={showAddTask.week}
           day={showAddTask.day}
+          startDate={plan.profile.startDate}
           onSave={task => handleAddTask(showAddTask.week, showAddTask.day, task)}
           onClose={() => setShowAddTask(null)}
         />
@@ -513,8 +531,8 @@ function DailyLogModal({ date, existingLog, onSave, onClose }: {
   );
 }
 
-function AddTaskModal({ week, day, onSave, onClose }: {
-  week: number; day: number; onSave: (task: Partial<Task>) => void; onClose: () => void;
+function AddTaskModal({ week, day, onSave, onClose, startDate }: {
+  week: number; day: number; onSave: (task: Partial<Task>) => void; onClose: () => void; startDate: string;
 }) {
   const [nlInput, setNlInput] = useState('');
   const [title, setTitle] = useState('');
@@ -558,7 +576,7 @@ function AddTaskModal({ week, day, onSave, onClose }: {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <h3>添加自定义任务</h3>
-        <p>第{week}周 {WEEKDAYS[day - 1]}</p>
+        <p>第{week}周 {getWeekdayLabel(computeDate(startDate, (week - 1) * 7 + day - 1))}</p>
 
         <div className="nl-input-wrapper">
           <label className="log-field-label">快速输入（可选）</label>

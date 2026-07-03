@@ -183,9 +183,9 @@ function adjustDifficulty(baseDifficulty: number, tolerance: number, week: numbe
 }
 
 function getDateString(startDate: string, offsetDays: number): string {
-  const d = new Date(startDate);
-  d.setDate(d.getDate() + offsetDays);
-  return d.toISOString().split('T')[0];
+  const [y, m, d] = startDate.split('-').map(Number);
+  const date = new Date(y, m - 1, d + offsetDays);
+  return date.toISOString().split('T')[0];
 }
 
 export function getTodayTasks(plan: Plan): Task[] {
