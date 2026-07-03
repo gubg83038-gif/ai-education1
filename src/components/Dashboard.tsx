@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import type { Plan, Task, TaskStatus, DailyLog } from '../types';
 import { adjustPlan } from '../engine/adjuster';
 import { updateTaskStatus, saveDailyLog, getDailyLog, updatePlan, addTaskToPlan, updateTaskInPlan, deleteTaskFromPlan } from '../data/store';
@@ -21,19 +21,10 @@ const STATUS_CONFIG: Record<TaskStatus, { icon: React.ReactNode; label: string; 
 };
 
 const DELAY_REASONS = ['时间不够', '难度太大', '精力不足', '有更紧急的事', '缺乏动力', '需要更多准备'];
-const WEEKDAY_NAMES = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+const WEEKDAY_NAMES = ['第一天', '第二天', '第三天', '第四天', '第五天', '第六天', '第七天'];
 
-function getWeekdayLabel(dateStr: string): string {
-  if (!dateStr) return '';
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const date = new Date(y, m - 1, d);
-  return WEEKDAY_NAMES[date.getDay()];
-}
-
-function computeDate(startDate: string, offsetDays: number): string {
-  const [y, m, d] = startDate.split('-').map(Number);
-  const date = new Date(y, m - 1, d + offsetDays);
-  return date.toISOString().split('T')[0];
+function getDayLabel(dayIndex: number): string {
+  return WEEKDAY_NAMES[dayIndex];
 }
 const CATEGORIES = ['阅读', '练习', '实践', '观看', '整理', '输出', '复习', '休息', '自定义'];
 
@@ -86,8 +77,20 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  const today = new Date().toISOString().split('T')[0];
-  const todayLog = getDailyLog(today);
+  const todayDateStr = new Date().toISOString().split('T')[0];
+  const todayLog = getDailyLog(todayDateStr);
+
+  const todayDayInfo = useMemo(() => {
+    const [sy, sm, sd] = plan.profile.startDate.split('-').map(Number);
+    const [ty, tm, td] = todayDateStr.split('-').map(Number);
+    const start = new Date(sy, sm - 1, sd);
+    const cur = new Date(ty, tm - 1, td);
+    const diff = Math.floor((cur.getTime() - start.getTime()) / 86400000);
+    if (diff < 0 || diff >= 28) return null;
+    const weekNum = Math.floor(diff / 7) + 1;
+    const dayNum = (diff % 7) + 1;
+    return { week: weekNum, day: dayNum };
+  }, [plan.profile.startDate, todayDateStr]);
 
   const currentWeek = plan.weeks.find(w => w.weekNumber === activeWeek) || plan.weeks[0];
   const allTasks = plan.weeks.flatMap(w => w.tasks);
@@ -114,11 +117,18 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
     updatePlan(planId, p);
   };
 
+  const isFutureTask = useCallback((task: Task) => {
+    if (!todayDayInfo) return false;
+    if (task.week > todayDayInfo.week) return true;
+    if (task.week === todayDayInfo.week && task.day > todayDayInfo.day) return true;
+    return false;
+  }, [todayDayInfo]);
+
   const handleStatusChange = (task: Task, newStatus: TaskStatus) => {
     if (newStatus === 'delayed') { setDelayTask(task); return; }
     if (newStatus === 'completed') {
-      if (task.date > today) {
-        showToast(`无法提前完成${task.date}的任务，可先移到今天再完成`, 'info');
+      if (isFutureTask(task)) {
+        showToast('还未到该任务的日期，无法提前完成', 'info');
         return;
       }
       stopTimer();
@@ -148,7 +158,7 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
   };
 
   const handleAddTask = (week: number, day: number, taskData: Partial<Task>) => {
-    const dayDate = plan.weeks[week - 1]?.tasks[0]?.date || today;
+    const dayDate = plan.weeks[week - 1]?.tasks[0]?.date || todayDateStr;
     const newTask: Task = {
       id: `custom_${Date.now()}`,
       title: taskData.title || '新任务',
@@ -187,15 +197,41 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
     if (direction === 'nextDay') { newDay = task.day + 1; if (newDay > 7) { newDay = 1; newWeek = task.week + 1; } }
     if (newWeek < 1 || newWeek > 4) return;
 
-    const weekTasks = plan.weeks.find(w => w.weekNumber === newWeek)?.tasks;
-    const newDate = weekTasks?.find(t => t.day === newDay)?.date || task.date;
-    handleEditTask(task, { week: newWeek, day: newDay, date: newDate });
+    const newPlan = structuredClone(plan);
+    const oldWeek = newPlan.weeks.find(w => w.weekNumber === task.week);
+    const targetWeek = newPlan.weeks.find(w => w.weekNumber === newWeek);
+    if (!oldWeek || !targetWeek) return;
+
+    oldWeek.tasks = oldWeek.tasks.filter(t => t.id !== task.id);
+    const weekTasks = targetWeek.tasks;
+    const newDate = weekTasks.find(t => t.day === newDay)?.date || task.date;
+    const movedTask: Task = { ...task, week: newWeek, day: newDay, date: newDate, order: targetWeek.tasks.length };
+    targetWeek.tasks.push(movedTask);
+
+    updatePlan(planId, newPlan);
+    setPlan(newPlan);
   };
 
   const toggleDay = (day: number) => {
     const next = new Set(expandedDays);
     if (next.has(day)) next.delete(day); else next.add(day);
     setExpandedDays(next);
+  };
+
+  const handleMoveToToday = (task: Task) => {
+    if (!todayDayInfo) return;
+    const newPlan = structuredClone(plan);
+    const oldWeek = newPlan.weeks.find(w => w.weekNumber === task.week);
+    const targetWeek = newPlan.weeks.find(w => w.weekNumber === todayDayInfo.week);
+    if (!oldWeek || !targetWeek) return;
+
+    oldWeek.tasks = oldWeek.tasks.filter(t => t.id !== task.id);
+    const movedTask: Task = { ...task, week: todayDayInfo.week, day: todayDayInfo.day, order: targetWeek.tasks.length };
+    targetWeek.tasks.push(movedTask);
+
+    updatePlan(planId, newPlan);
+    setPlan(newPlan);
+    showToast('任务已移到今天', 'success', todayDayInfo.week, todayDayInfo.day);
   };
 
   const handleDailyLogSave = (log: DailyLog) => {
@@ -206,10 +242,8 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
   const handleCoachAction = (action: string) => {
     const newPlan = structuredClone(plan);
     const allTasks = newPlan.weeks.flatMap(w => w.tasks);
-    const today = new Date().toISOString().split('T')[0];
-    const currentWeekTasks = allTasks.filter(t => t.date === today);
-    const w = currentWeekTasks[0]?.week || activeWeek;
-    const d = currentWeekTasks[0]?.day || (new Date().getDay() || 7);
+    const todayWeek = todayDayInfo?.week || activeWeek;
+    const todayDay = todayDayInfo?.day || (new Date().getDay() || 7);
 
     if (action === 'upgrade') {
       const pending = allTasks.filter(t => t.status === 'pending');
@@ -220,7 +254,7 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
       });
       updatePlan(planId, newPlan);
       setPlan(newPlan);
-      showToast(`第${w}周 周${d} · 已提升 ${count} 个任务难度，挑战加速！`, 'success', w, d);
+      showToast(`第${todayWeek}周 周${todayDay} · 已提升 ${count} 个任务难度，挑战加速！`, 'success', todayWeek, todayDay);
     } else if (action === 'split') {
       const delayed = allTasks.filter(t => t.status === 'delayed');
       const task = delayed[0];
@@ -248,13 +282,12 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
         showToast(`第${task.week}周 周${task.day} · 已恢复"${task.title.slice(0, 10)}"并新增微行动`, 'success', task.week, task.day);
       }
     } else if (action === 'reduce') {
-      const todayStr = new Date().toISOString().split('T')[0];
-      const todayTasks = allTasks.filter(t => t.date === todayStr && t.status === 'pending');
-      const toSkip = todayTasks.filter(t => t.difficulty >= 3).slice(Math.floor(todayTasks.length / 2));
+      const reduceTasks = allTasks.filter(t => t.week === todayWeek && t.day === todayDay && t.status === 'pending');
+      const toSkip = reduceTasks.filter(t => t.difficulty >= 3).slice(Math.floor(reduceTasks.length / 2));
       toSkip.forEach(t => { t.status = 'skipped'; });
       updatePlan(planId, newPlan);
       setPlan(newPlan);
-      showToast(`第${w}周 周${d} · 已跳过 ${toSkip.length} 个高难度任务，今天轻松点`, 'info', w, d);
+      showToast(`第${todayWeek}周 周${todayDay} · 已跳过 ${toSkip.length} 个高难度任务，今天轻松点`, 'info', todayWeek, todayDay);
     }
   };
 
@@ -336,18 +369,16 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
         {Array.from({ length: 7 }, (_, idx) => {
           const day = idx + 1;
           const dayTasks = tasksByDay[day] || [];
-          const dateStr = dayTasks[0]?.date || computeDate(plan.profile.startDate, (activeWeek - 1) * 7 + idx);
-          const isToday = dateStr === today;
+          const isToday = todayDayInfo?.week === activeWeek && todayDayInfo?.day === day;
           const isExpanded = expandedDays.has(day);
           const dayCompleted = dayTasks.filter(t => t.status === 'completed').length;
-          const dayLabel = getWeekdayLabel(dateStr);
+          const dayLabel = getDayLabel(idx);
 
           return (
             <div key={day} className={`day-group ${isToday ? 'today' : ''}`}>
               <div className="day-header" onClick={() => toggleDay(day)}>
                 <div className="day-info">
                   <span className="day-name">{dayLabel}</span>
-                  <span className="day-date">{dateStr}</span>
                   {isToday && <span className="today-badge">今天</span>}
                 </div>
                 <div className="day-meta">
@@ -375,18 +406,16 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
                   ) : plan.profile.splitByHalfDay ? (
                     <HalfDayTasks
                       dayTasks={dayTasks}
-                      today={today}
                       timerTaskRef={timerTaskRef}
                       timerSeconds={timerSeconds}
                       formatTime={formatTime}
                       stopTimer={stopTimer}
                       handleStatusChange={handleStatusChange}
-                      handleEditTask={handleEditTask}
                       handleDeleteTask={handleDeleteTask}
                       handleMoveTask={handleMoveTask}
+                      handleMoveToToday={handleMoveToToday}
+                      isFutureTask={isFutureTask}
                       setEditingTask={setEditingTask}
-                      activeWeek={activeWeek}
-                      showToast={showToast}
                     />
                   ) : (
                     dayTasks.map((task) => (
@@ -421,10 +450,10 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
                             <div className="task-actions">
                               {task.status === 'pending' || task.status === 'in_progress' ? (
                                 <>
-                                  {task.date <= today ? (
-                                    <button className="btn btn-success btn-sm" onClick={() => handleStatusChange(task, 'completed')} title="完成"><Check size={14} /></button>
+                                  {isFutureTask(task) ? (
+                                    <button className="btn btn-info btn-sm" onClick={() => { handleMoveToToday(task); }} title="移到今天">移到今天</button>
                                   ) : (
-                                    <button className="btn btn-info btn-sm" onClick={() => { handleEditTask(task, { date: today, week: activeWeek, day: new Date().getDay() || 7 }); showToast('任务已移到今天，现在可以完成了', 'success', activeWeek, new Date().getDay() || 7); }} title="移到今天"><ArrowLeft size={14} /> 移到今天</button>
+                                    <button className="btn btn-success btn-sm" onClick={() => handleStatusChange(task, 'completed')} title="完成"><Check size={14} /></button>
                                   )}
                                   <button className="btn btn-warning btn-sm" onClick={() => handleStatusChange(task, 'in_progress')} title="开始"><Play size={14} /></button>
                                   <button className="btn btn-danger btn-sm" onClick={() => handleStatusChange(task, 'delayed')} title="延迟"><AlertCircle size={14} /></button>
@@ -471,14 +500,13 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
       )}
 
       {/* Daily Log Modal */}
-      {showDailyLog && <DailyLogModal date={today} existingLog={todayLog} onSave={handleDailyLogSave} onClose={() => setShowDailyLog(false)} />}
+      {showDailyLog && <DailyLogModal date={todayDateStr} existingLog={todayLog} onSave={handleDailyLogSave} onClose={() => setShowDailyLog(false)} />}
 
       {/* Add Task Modal */}
       {showAddTask && (
         <AddTaskModal
           week={showAddTask.week}
           day={showAddTask.day}
-          startDate={plan.profile.startDate}
           onSave={task => handleAddTask(showAddTask.week, showAddTask.day, task)}
           onClose={() => setShowAddTask(null)}
         />
@@ -531,8 +559,8 @@ function DailyLogModal({ date, existingLog, onSave, onClose }: {
   );
 }
 
-function AddTaskModal({ week, day, onSave, onClose, startDate }: {
-  week: number; day: number; onSave: (task: Partial<Task>) => void; onClose: () => void; startDate: string;
+function AddTaskModal({ week, day, onSave, onClose }: {
+  week: number; day: number; onSave: (task: Partial<Task>) => void; onClose: () => void;
 }) {
   const [nlInput, setNlInput] = useState('');
   const [title, setTitle] = useState('');
@@ -576,7 +604,7 @@ function AddTaskModal({ week, day, onSave, onClose, startDate }: {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <h3>添加自定义任务</h3>
-        <p>第{week}周 {getWeekdayLabel(computeDate(startDate, (week - 1) * 7 + day - 1))}</p>
+        <p>第{week}周 {getDayLabel(day - 1)}</p>
 
         <div className="nl-input-wrapper">
           <label className="log-field-label">快速输入（可选）</label>
@@ -671,19 +699,18 @@ function EditTaskModal({ task, onSave, onClose }: {
 }
 
 function HalfDayTasks({
-  dayTasks, today, timerTaskRef, timerSeconds, formatTime, stopTimer,
-  handleStatusChange, handleEditTask, handleDeleteTask, handleMoveTask,
-  setEditingTask, activeWeek, showToast,
+  dayTasks, timerTaskRef, timerSeconds, formatTime, stopTimer,
+  handleStatusChange, handleDeleteTask, handleMoveTask, handleMoveToToday, isFutureTask,
+  setEditingTask,
 }: {
-  dayTasks: Task[]; today: string; timerTaskRef: React.MutableRefObject<Task | null>;
+  dayTasks: Task[]; timerTaskRef: React.MutableRefObject<Task | null>;
   timerSeconds: number; formatTime: (s: number) => string; stopTimer: () => void;
   handleStatusChange: (t: Task, s: TaskStatus) => void;
-  handleEditTask: (t: Task, u: Partial<Task>) => void;
   handleDeleteTask: (id: string) => void;
   handleMoveTask: (t: Task, d: 'up' | 'down' | 'prevDay' | 'nextDay') => void;
+  handleMoveToToday: (t: Task) => void;
+  isFutureTask: (t: Task) => boolean;
   setEditingTask: (t: Task) => void;
-  activeWeek: number;
-  showToast: (m: string, type: 'success' | 'info', w?: number, d?: number) => void;
 }) {
   const morning = dayTasks.filter(t => t.halfDay === 'morning');
   const afternoon = dayTasks.filter(t => t.halfDay === 'afternoon');
@@ -719,10 +746,10 @@ function HalfDayTasks({
           <div className="task-actions">
             {task.status === 'pending' || task.status === 'in_progress' ? (
               <>
-                {task.date <= today ? (
-                  <button className="btn btn-success btn-sm" onClick={() => handleStatusChange(task, 'completed')} title="完成"><Check size={14} /></button>
+                {isFutureTask(task) ? (
+                  <button className="btn btn-info btn-sm" onClick={() => { handleMoveToToday(task); }} title="移到今天">移到今天</button>
                 ) : (
-                  <button className="btn btn-info btn-sm" onClick={() => { handleEditTask(task, { date: today, week: activeWeek, day: new Date().getDay() || 7 }); showToast('任务已移到今天', 'success', activeWeek, new Date().getDay() || 7); }} title="移到今天"><ArrowLeft size={14} /></button>
+                  <button className="btn btn-success btn-sm" onClick={() => handleStatusChange(task, 'completed')} title="完成"><Check size={14} /></button>
                 )}
                 <button className="btn btn-warning btn-sm" onClick={() => handleStatusChange(task, 'in_progress')} title="开始"><Play size={14} /></button>
                 <button className="btn btn-danger btn-sm" onClick={() => handleStatusChange(task, 'delayed')} title="延迟"><AlertCircle size={14} /></button>
