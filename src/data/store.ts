@@ -16,6 +16,9 @@ function loadData(): AppData {
                 p.profile.learningStyles = [(p.profile as any).learningStyle];
                 delete (p.profile as any).learningStyle;
               }
+              if (p.profile && (p.profile as any).splitByHalfDay === undefined) {
+                p.profile.splitByHalfDay = false;
+              }
             }
           }
         }
@@ -249,6 +252,9 @@ export function migrateLegacyData(): boolean {
   if ((legacyPlan.profile as any).learningStyle && !legacyPlan.profile.learningStyles) {
     (legacyPlan.profile as any).learningStyles = [(legacyPlan.profile as any).learningStyle];
     delete (legacyPlan.profile as any).learningStyle;
+  }
+  if ((legacyPlan.profile as any).splitByHalfDay === undefined) {
+    (legacyPlan.profile as any).splitByHalfDay = false;
   }
 
   const user: UserAccount = {

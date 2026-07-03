@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import type { Plan, Task, TaskStatus, DailyLog } from '../types';
 import { adjustPlan } from '../engine/adjuster';
 import { updateTaskStatus, saveDailyLog, getDailyLog, updatePlan, addTaskToPlan, updateTaskInPlan, deleteTaskFromPlan } from '../data/store';
-import { Check, Clock, SkipForward, AlertCircle, ChevronRight, ChevronLeft, BarChart3, Zap, Battery, Brain, Plus, Trash2, Edit3, ArrowLeft, MoveUp, MoveDown, Sparkles, X } from 'lucide-react';
+import { Check, Clock, SkipForward, AlertCircle, ChevronRight, ChevronLeft, BarChart3, Battery, Brain, Plus, Trash2, Edit3, ArrowLeft, MoveUp, MoveDown, Sparkles, X, Lightbulb, Play, Timer, RotateCcw } from 'lucide-react';
 import { CoachReview, ProcrastinationWarning, TodayPreview } from './Coach';
 
 interface Props {
@@ -14,7 +14,7 @@ interface Props {
 
 const STATUS_CONFIG: Record<TaskStatus, { icon: React.ReactNode; label: string; className: string }> = {
   pending: { icon: <Clock size={14} />, label: '待开始', className: 'status-pending' },
-  in_progress: { icon: <Zap size={14} />, label: '进行中', className: 'status-progress' },
+  in_progress: { icon: <Play size={14} />, label: '进行中', className: 'status-progress' },
   completed: { icon: <Check size={14} />, label: '已完成', className: 'status-completed' },
   delayed: { icon: <AlertCircle size={14} />, label: '已延迟', className: 'status-delayed' },
   skipped: { icon: <SkipForward size={14} />, label: '已跳过', className: 'status-skipped' },
@@ -39,6 +39,38 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
   const showToast = (message: string, type: 'success' | 'info' = 'info', week?: number, day?: number) => {
     setToast({ message, type, week: week || 0, day: day || 0 });
     setTimeout(() => setToast(null), 4000);
+  };
+
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  const timerTaskRef = useRef<Task | null>(null);
+  const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startTimer = (task: Task) => {
+    stopTimer();
+    timerTaskRef.current = task;
+    setTimerSeconds(0);
+    timerIntervalRef.current = setInterval(() => {
+      setTimerSeconds(s => s + 1);
+    }, 1000);
+  };
+
+  const stopTimer = () => {
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+    timerTaskRef.current = null;
+    setTimerSeconds(0);
+  };
+
+  useEffect(() => {
+    return () => stopTimer();
+  }, []);
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
   const today = new Date().toISOString().split('T')[0];
@@ -71,6 +103,22 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
 
   const handleStatusChange = (task: Task, newStatus: TaskStatus) => {
     if (newStatus === 'delayed') { setDelayTask(task); return; }
+    if (newStatus === 'completed') {
+      if (task.date > today) {
+        showToast(`无法提前完成${task.date}的任务，可先移到今天再完成`, 'info');
+        return;
+      }
+      stopTimer();
+      if (timerTaskRef.current?.id === task.id) {
+        task.actualMinutes = Math.round(timerSeconds / 60);
+      }
+    }
+    if (newStatus === 'in_progress') {
+      startTimer(task);
+    }
+    if (newStatus === 'pending') {
+      stopTimer();
+    }
     applyStatusChange(task, newStatus);
   };
 
@@ -225,7 +273,7 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
             <Brain size={16} /> 每日状态
           </button>
           <button className="btn btn-accent" onClick={onViewInsights}>
-            <Zap size={16} /> 洞察报告
+            <Lightbulb size={16} /> 洞察报告
           </button>
         </div>
       </header>
@@ -307,6 +355,22 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
                         <Plus size={14} /> 添加任务
                       </button>
                     </div>
+                  ) : plan.profile.splitByHalfDay ? (
+                    <HalfDayTasks
+                      dayTasks={dayTasks}
+                      today={today}
+                      timerTaskRef={timerTaskRef}
+                      timerSeconds={timerSeconds}
+                      formatTime={formatTime}
+                      stopTimer={stopTimer}
+                      handleStatusChange={handleStatusChange}
+                      handleEditTask={handleEditTask}
+                      handleDeleteTask={handleDeleteTask}
+                      handleMoveTask={handleMoveTask}
+                      setEditingTask={setEditingTask}
+                      activeWeek={activeWeek}
+                      showToast={showToast}
+                    />
                   ) : (
                     dayTasks.map((task, taskIdx) => (
                       <div key={task.id} className={`task-card ${task.status} ${task.isCustom ? 'custom-task' : ''}`}>
@@ -325,6 +389,13 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
                             </div>
                             <h4 className="task-title">{task.title}</h4>
                             <p className="task-desc">{task.description}</p>
+                            {task.status === 'in_progress' && timerTaskRef.current?.id === task.id && (
+                              <div className="task-timer">
+                                <Timer size={14} />
+                                <span>{formatTime(timerSeconds)}</span>
+                                <button className="btn btn-ghost btn-sm" onClick={stopTimer} title="停止计时"><RotateCcw size={12} /></button>
+                              </div>
+                            )}
                             {task.delayedReason && (
                               <p className="task-reason">延迟原因: {task.delayedReason}</p>
                             )}
@@ -333,8 +404,12 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
                             <div className="task-actions">
                               {task.status === 'pending' || task.status === 'in_progress' ? (
                                 <>
-                                  <button className="btn btn-success btn-sm" onClick={() => handleStatusChange(task, 'completed')} title="完成"><Check size={14} /></button>
-                                  <button className="btn btn-warning btn-sm" onClick={() => handleStatusChange(task, 'in_progress')} title="开始"><Zap size={14} /></button>
+                                  {task.date <= today ? (
+                                    <button className="btn btn-success btn-sm" onClick={() => handleStatusChange(task, 'completed')} title="完成"><Check size={14} /></button>
+                                  ) : (
+                                    <button className="btn btn-info btn-sm" onClick={() => { handleEditTask(task, { date: today, week: activeWeek, day: new Date().getDay() || 7 }); showToast('任务已移到今天，现在可以完成了', 'success', activeWeek, new Date().getDay() || 7); }} title="移到今天"><ArrowLeft size={14} /> 移到今天</button>
+                                  )}
+                                  <button className="btn btn-warning btn-sm" onClick={() => handleStatusChange(task, 'in_progress')} title="开始"><Play size={14} /></button>
                                   <button className="btn btn-danger btn-sm" onClick={() => handleStatusChange(task, 'delayed')} title="延迟"><AlertCircle size={14} /></button>
                                   <button className="btn btn-ghost btn-sm" onClick={() => handleStatusChange(task, 'skipped')} title="跳过"><SkipForward size={14} /></button>
                                 </>
@@ -574,5 +649,131 @@ function EditTaskModal({ task, onSave, onClose }: {
         </div>
       </div>
     </div>
+  );
+}
+
+function HalfDayTasks({
+  dayTasks, today, timerTaskRef, timerSeconds, formatTime, stopTimer,
+  handleStatusChange, handleEditTask, handleDeleteTask, handleMoveTask,
+  setEditingTask, activeWeek, showToast,
+}: {
+  dayTasks: Task[]; today: string; timerTaskRef: React.MutableRefObject<Task | null>;
+  timerSeconds: number; formatTime: (s: number) => string; stopTimer: () => void;
+  handleStatusChange: (t: Task, s: TaskStatus) => void;
+  handleEditTask: (t: Task, u: Partial<Task>) => void;
+  handleDeleteTask: (id: string) => void;
+  handleMoveTask: (t: Task, d: 'up' | 'down' | 'prevDay' | 'nextDay') => void;
+  setEditingTask: (t: Task) => void;
+  activeWeek: number;
+  showToast: (m: string, type: 'success' | 'info', w?: number, d?: number) => void;
+}) {
+  const morning = dayTasks.filter(t => t.halfDay === 'morning');
+  const afternoon = dayTasks.filter(t => t.halfDay === 'afternoon');
+  const unsorted = dayTasks.filter(t => !t.halfDay);
+
+  const renderTask = (task: Task) => (
+    <div key={task.id} className={`task-card ${task.status} ${task.isCustom ? 'custom-task' : ''} task-enter`}>
+      <div className="task-main">
+        <div className="task-info">
+          <div className="task-header">
+            <span className={`task-status-badge ${STATUS_CONFIG[task.status].className}`}>
+              {STATUS_CONFIG[task.status].icon}
+              {STATUS_CONFIG[task.status].label}
+            </span>
+            <span className={`task-difficulty difficulty-${task.difficulty}`}>
+              {'★'.repeat(task.difficulty)}{'☆'.repeat(5 - task.difficulty)}
+            </span>
+            <span className="task-time">{task.estimatedMinutes}分钟</span>
+            {task.isCustom && <span className="task-custom-badge">自定义</span>}
+          </div>
+          <h4 className="task-title">{task.title}</h4>
+          <p className="task-desc">{task.description}</p>
+          {task.status === 'in_progress' && timerTaskRef.current?.id === task.id && (
+            <div className="task-timer">
+              <Timer size={14} />
+              <span>{formatTime(timerSeconds)}</span>
+              <button className="btn btn-ghost btn-sm" onClick={stopTimer} title="停止计时"><RotateCcw size={12} /></button>
+            </div>
+          )}
+          {task.delayedReason && <p className="task-reason">延迟原因: {task.delayedReason}</p>}
+        </div>
+        <div className="task-actions-col">
+          <div className="task-actions">
+            {task.status === 'pending' || task.status === 'in_progress' ? (
+              <>
+                {task.date <= today ? (
+                  <button className="btn btn-success btn-sm" onClick={() => handleStatusChange(task, 'completed')} title="完成"><Check size={14} /></button>
+                ) : (
+                  <button className="btn btn-info btn-sm" onClick={() => { handleEditTask(task, { date: today, week: activeWeek, day: new Date().getDay() || 7 }); showToast('任务已移到今天', 'success', activeWeek, new Date().getDay() || 7); }} title="移到今天"><ArrowLeft size={14} /></button>
+                )}
+                <button className="btn btn-warning btn-sm" onClick={() => handleStatusChange(task, 'in_progress')} title="开始"><Play size={14} /></button>
+                <button className="btn btn-danger btn-sm" onClick={() => handleStatusChange(task, 'delayed')} title="延迟"><AlertCircle size={14} /></button>
+                <button className="btn btn-ghost btn-sm" onClick={() => handleStatusChange(task, 'skipped')} title="跳过"><SkipForward size={14} /></button>
+              </>
+            ) : (
+              <button className="btn btn-outline btn-sm" onClick={() => handleStatusChange(task, 'pending')}>重置</button>
+            )}
+          </div>
+          <div className="task-tools">
+            <button className="btn btn-ghost btn-sm" onClick={() => setEditingTask(task)} title="编辑"><Edit3 size={12} /></button>
+            <button className="btn btn-ghost btn-sm" onClick={() => handleDeleteTask(task.id)} title="删除"><Trash2 size={12} /></button>
+            <button className="btn btn-ghost btn-sm" onClick={() => handleMoveTask(task, 'prevDay')} title="移到前一天"><MoveUp size={12} /></button>
+            <button className="btn btn-ghost btn-sm" onClick={() => handleMoveTask(task, 'nextDay')} title="移到后一天"><MoveDown size={12} /></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="half-day-container">
+      {morning.length > 0 && (
+        <div className="half-day-section">
+          <div className="half-day-header">
+            <SunIcon /> <span>上午</span>
+            <span className="half-day-count">{morning.length}个任务 · {morning.reduce((s, t) => s + t.estimatedMinutes, 0)}分钟</span>
+          </div>
+          {morning.map(renderTask)}
+        </div>
+      )}
+      {afternoon.length > 0 && (
+        <div className="half-day-section">
+          <div className="half-day-header">
+            <SunsetIcon /> <span>下午</span>
+            <span className="half-day-count">{afternoon.length}个任务 · {afternoon.reduce((s, t) => s + t.estimatedMinutes, 0)}分钟</span>
+          </div>
+          {afternoon.map(renderTask)}
+        </div>
+      )}
+      {unsorted.length > 0 && morning.length === 0 && afternoon.length === 0 && (
+        <div>{unsorted.map(renderTask)}</div>
+      )}
+    </div>
+  );
+}
+
+function SunIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round">
+      <circle cx="12" cy="12" r="5" />
+      <line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" />
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+      <line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" />
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+    </svg>
+  );
+}
+
+function SunsetIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f97316" strokeWidth="2" strokeLinecap="round">
+      <path d="M17 18a5 5 0 0 0-10 0" />
+      <line x1="12" y1="9" x2="12" y2="3" />
+      <line x1="4.22" y1="10.22" x2="5.64" y2="11.64" /><line x1="1" y1="18" x2="3" y2="18" />
+      <line x1="21" y1="18" x2="23" y2="18" /><line x1="18.36" y1="11.64" x2="19.78" y2="10.22" />
+      <line x1="12" y1="3" x2="12" y2="3.01" />
+      <polyline points="9 3 12 6 15 3" />
+      <line x1="7" y1="21" x2="17" y2="21" />
+    </svg>
   );
 }

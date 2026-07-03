@@ -244,6 +244,8 @@ textarea, input[type="text"], input[type="date"] {
 .btn-danger:hover { background: #dc2626; }
 .btn-ghost { background: transparent; color: var(--text-secondary); }
 .btn-ghost:hover { background: var(--bg-hover); color: var(--text); }
+.btn-info { background: var(--info); color: #fff; }
+.btn-info:hover { background: #2563eb; }
 .btn-icon { padding: 8px; border-radius: 50%; background: transparent; color: var(--text-secondary); }
 .btn-icon:hover { background: var(--bg-hover); }
 .btn-sm { padding: 6px 12px; font-size: 13px; }
@@ -430,6 +432,70 @@ textarea, input[type="text"], input[type="date"] {
   display: flex;
   gap: 8px;
 }
+
+/* ===== TOGGLE SWITCH ===== */
+.toggle-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  margin-top: 16px;
+}
+
+.toggle-option-info {
+  text-align: left;
+}
+
+.toggle-label {
+  display: block;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.toggle-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: block;
+  margin-top: 2px;
+}
+
+.toggle-switch {
+  width: 52px;
+  height: 28px;
+  border-radius: 14px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.3s;
+  position: relative;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.toggle-switch.off {
+  background: var(--border);
+}
+
+.toggle-switch.on {
+  background: var(--primary);
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  transition: left 0.3s;
+}
+
+.toggle-switch.off .toggle-knob { left: 3px; }
+.toggle-switch.on .toggle-knob { left: 27px; }
 
 .generating {
   text-align: center;
@@ -1909,6 +1975,60 @@ textarea, input[type="text"], input[type="date"] {
 @keyframes toastOut {
   from { opacity: 1; transform: translateX(-50%) translateY(0); }
   to { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+}
+
+/* ===== TASK TIMER ===== */
+.task-timer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--primary-bg);
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary);
+  font-variant-numeric: tabular-nums;
+  margin-top: 6px;
+  width: fit-content;
+  animation: pulse 2s ease infinite;
+}
+
+.task-timer .btn-ghost {
+  padding: 2px 4px;
+  margin-left: 4px;
+}
+
+/* ===== HALF-DAY SECTIONS ===== */
+.half-day-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.half-day-section {
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.half-day-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  border-radius: 6px;
+  margin-bottom: 4px;
+}
+
+.half-day-count {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
 }
 
 /* Responsive */

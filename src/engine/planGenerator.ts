@@ -99,10 +99,24 @@ export function generatePlan(profile: UserProfile): Plan {
       let remainingMinutes = profile.timePerDay;
       let taskIndex = 0;
 
+      const halfDaySplit = profile.splitByHalfDay;
+      const morningMinutes = halfDaySplit ? Math.floor(profile.timePerDay * 0.5) : 0;
+      let usedMorning = 0;
+
       for (const action of dayActions) {
         if (remainingMinutes <= 10) break;
         const adjustedMinutes = Math.min(action.baseMinutes, remainingMinutes);
         remainingMinutes -= adjustedMinutes;
+
+        let halfDay: 'morning' | 'afternoon' | undefined;
+        if (halfDaySplit) {
+          if (usedMorning + adjustedMinutes <= morningMinutes + 10) {
+            halfDay = 'morning';
+            usedMorning += adjustedMinutes;
+          } else {
+            halfDay = 'afternoon';
+          }
+        }
 
         tasks.push({
           id: generateTaskId(w, d, taskIndex),
@@ -116,6 +130,7 @@ export function generatePlan(profile: UserProfile): Plan {
           status: 'pending',
           category: action.cat,
           order: taskIndex,
+          halfDay,
         });
         taskIndex++;
       }

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { UserProfile, LearningStyle } from '../types';
-import { Target, Clock, BarChart3, BookOpen, AlertTriangle, FileText } from 'lucide-react';
+import { Target, Clock, BarChart3, BookOpen, AlertTriangle, FileText, Sun } from 'lucide-react';
 import PlanOptionsSelector from './PlanOptionsSelector';
 
 interface Props {
@@ -69,6 +69,14 @@ const DIMENSIONS = [
     hint: '任何可能影响计划的约束条件',
     type: 'text' as const,
   },
+  {
+    key: 'splitByHalfDay' as const,
+    label: '按上下午细分计划',
+    icon: Sun,
+    placeholder: '',
+    hint: '开启后每天的任务会分为上午和下午两个时段，更精细地安排学习',
+    type: 'toggle' as const,
+  },
 ];
 
 export default function Onboarding({ onComplete, onCancel }: Props) {
@@ -80,6 +88,7 @@ export default function Onboarding({ onComplete, onCancel }: Props) {
     learningStyles: ['mixed'],
     constraints: '',
     startDate: new Date().toISOString().split('T')[0],
+    splitByHalfDay: false,
   });
 
   const [step, setStep] = useState(0);
@@ -208,6 +217,21 @@ export default function Onboarding({ onComplete, onCancel }: Props) {
                 onChange={e => setProfile({ ...profile, startDate: e.target.value })}
                 className="input-date"
               />
+            </div>
+          )}
+
+          {dim.type === 'toggle' && (
+            <div className="toggle-option">
+              <div className="toggle-option-info">
+                <span className="toggle-label">上午 / 下午 分别安排</span>
+                <span className="toggle-hint">每天任务分为上午和下午两个时段，查看更清晰</span>
+              </div>
+              <button
+                className={`toggle-switch ${profile.splitByHalfDay ? 'on' : 'off'}`}
+                onClick={() => setProfile({ ...profile, splitByHalfDay: !profile.splitByHalfDay })}
+              >
+                <div className="toggle-knob" />
+              </button>
             </div>
           )}
         </div>

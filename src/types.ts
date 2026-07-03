@@ -7,6 +7,7 @@ export interface UserProfile {
   learningStyles: LearningStyle[];
   constraints: string;
   startDate: string;
+  splitByHalfDay: boolean;
 }
 
 export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'delayed' | 'skipped';
@@ -27,6 +28,7 @@ export interface Task {
   delayedReason?: string;
   order: number;
   isCustom?: boolean;
+  halfDay?: 'morning' | 'afternoon';
 }
 
 export interface WeekPlan {
