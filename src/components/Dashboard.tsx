@@ -30,6 +30,11 @@ const CATEGORIES = ['阅读', '练习', '实践', '观看', '整理', '输出', 
 
 export default function Dashboard({ planId, plan: initialPlan, onBack, onViewInsights }: Props) {
   const [plan, setPlan] = useState<Plan>(initialPlan);
+
+  const updatePlanState = (p: Plan) => {
+    setPlan(p);
+    updatePlan(planId, p);
+  };
   const [activeWeek, setActiveWeek] = useState(1);
   const [expandedDays, setExpandedDays] = useState<Set<number>>(new Set([new Date().getDay() || 7]));
   const [delayTask, setDelayTask] = useState<Task | null>(null);
@@ -113,8 +118,7 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
   }, [currentWeek]);
 
   const savePlan = (p: Plan) => {
-    setPlan(p);
-    updatePlan(planId, p);
+    updatePlanState(p);
   };
 
   const isFutureTask = useCallback((task: Task) => {
@@ -208,8 +212,7 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
     const movedTask: Task = { ...task, week: newWeek, day: newDay, date: newDate, order: targetWeek.tasks.length };
     targetWeek.tasks.push(movedTask);
 
-    updatePlan(planId, newPlan);
-    setPlan(newPlan);
+    updatePlanState(newPlan);
   };
 
   const toggleDay = (day: number) => {
@@ -229,8 +232,7 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
     const movedTask: Task = { ...task, week: todayDayInfo.week, day: todayDayInfo.day, order: targetWeek.tasks.length };
     targetWeek.tasks.push(movedTask);
 
-    updatePlan(planId, newPlan);
-    setPlan(newPlan);
+    updatePlanState(newPlan);
     showToast('任务已移到今天', 'success', todayDayInfo.week, todayDayInfo.day);
   };
 
@@ -252,9 +254,8 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
         t.difficulty = Math.min(5, t.difficulty + 1);
         t.estimatedMinutes = Math.round(t.estimatedMinutes * 1.1);
       });
-      updatePlan(planId, newPlan);
-      setPlan(newPlan);
-      showToast(`第${todayWeek}周 周${todayDay} · 已提升 ${count} 个任务难度，挑战加速！`, 'success', todayWeek, todayDay);
+      updatePlanState(newPlan);
+      showToast(`第${todayWeek}周 第${todayDay}天 · 已提升 ${count} 个任务难度`, 'success', todayWeek, todayDay);
     } else if (action === 'split') {
       const delayed = allTasks.filter(t => t.status === 'delayed');
       const task = delayed[0];
@@ -277,17 +278,15 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
         };
         const week = newPlan.weeks.find(w => w.weekNumber === task.week);
         week?.tasks.push(microTask);
-        updatePlan(planId, newPlan);
-        setPlan(newPlan);
-        showToast(`第${task.week}周 周${task.day} · 已恢复"${task.title.slice(0, 10)}"并新增微行动`, 'success', task.week, task.day);
+        updatePlanState(newPlan);
+        showToast(`第${task.week}周 第${task.day}天 · 已恢复并新增微行动`, 'success', task.week, task.day);
       }
     } else if (action === 'reduce') {
       const reduceTasks = allTasks.filter(t => t.week === todayWeek && t.day === todayDay && t.status === 'pending');
       const toSkip = reduceTasks.filter(t => t.difficulty >= 3).slice(Math.floor(reduceTasks.length / 2));
       toSkip.forEach(t => { t.status = 'skipped'; });
-      updatePlan(planId, newPlan);
-      setPlan(newPlan);
-      showToast(`第${todayWeek}周 周${todayDay} · 已跳过 ${toSkip.length} 个高难度任务，今天轻松点`, 'info', todayWeek, todayDay);
+      updatePlanState(newPlan);
+      showToast(`第${todayWeek}周 第${todayDay}天 · 已跳过 ${toSkip.length} 个高难度任务`, 'info', todayWeek, todayDay);
     }
   };
 
