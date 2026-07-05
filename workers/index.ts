@@ -11,11 +11,7 @@ const corsHeaders = {
 };
 
 const SYSTEM_PROMPTS = {
-  'generate-plan': `你是资深学习规划师。根据用户信息生成详细的4周学习计划JSON。
-
-格式：{"weeks":[{"weekNumber":1,"theme":"主题","goals":["可量化目标"],"tasks":[{"day":1,"tasks":[{"title":"任务","description":"具体描述（含做什么、怎么做、完成标准，20-40字）","estimatedMinutes":45,"difficulty":3,"category":"阅读|练习|实践|观看|整理|输出|复习","halfDay":"morning"}]}]}]}
-
-规则：每周7天每天2-5个任务；难度1-5前两周偏低后两周递增；每天首任务为低难度热身；末任务为5-10分钟今日小结；周三穿插整理复习；周日安排本周回顾；描述务必具体可执行；总时长不超每日可用时间。`,
+  'generate-plan': `生成一个4周学习计划的JSON，格式：{"weeks":[{"weekNumber":1,"theme":"","goals":[""],"tasks":[{"day":1,"tasks":[{"title":"","description":"","estimatedMinutes":30,"difficulty":2,"category":"阅读"}]}]}]}。每天2-3个任务。`,
 
 
   'coach-chat': `你是AI学习教练。根据用户执行数据给出个性化反馈。
@@ -55,23 +51,7 @@ export default {
 
       let userMessage: string;
       if (path === 'generate-plan') {
-        userMessage = `请为以下用户生成极其详细的4周学习计划：
-
-学习目标：${body.goal}
-计划名称：${body.planName || ''}
-每日可用时间：${body.timePerDay}分钟
-难度承受力：${body.difficultyTolerance}/10
-学习风格偏好：${body.learningStyles?.join('、')}
-限制条件：${body.constraints || '无'}
-上下午拆分计划：${body.splitByHalfDay ? '是' : '否'}
-计划开始日期：${body.startDate}
-
-要求：
-- 每个任务的描述必须包含具体动作、推荐资源和完成标准
-- 任务安排要合理利用用户的可用时间和学习风格
-- 如果是上下午拆分，上午安排重点学习任务，下午安排练习和复习
-- 每天第一个任务是热身任务（低难度），最后一个任务是今日小结（5-10分钟写总结）
-- 请务必基于用户的实际目标来定制详细内容，不要泛泛而谈`;
+        userMessage = `目标：${body.goal}\n每日${body.timePerDay}分钟\n难度承受${body.difficultyTolerance}/10\n风格：${body.learningStyles?.join('、')}\n约束：${body.constraints || '无'}\n上下午：${body.splitByHalfDay ? '是' : '否'}`;
       } else if (path === 'coach-chat') {
         userMessage = `执行数据：${JSON.stringify(body.stats)}\n近期动作：${JSON.stringify(body.recentActions)}`;
       } else if (path === 'decompose-task') {
@@ -87,7 +67,7 @@ export default {
           { role: 'user', content: userMessage },
         ],
         env,
-        { temperature: isGeneratePlan ? 0.8 : 0.7, jsonMode: true, maxTokens: isGeneratePlan ? 3072 : 4096 },
+        { temperature: 0.8, jsonMode: true, maxTokens: 4096 },
       );
 
       // Handle markdown-wrapped JSON from DeepSeek
@@ -100,7 +80,7 @@ export default {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     } catch (err: any) {
-      return new Response(JSON.stringify({ success: false, error: err.message }), {
+      return new Response(JSON.stringify({ success: false, error: err?.message || err?.toString() || 'Unknown error' }), {
         status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

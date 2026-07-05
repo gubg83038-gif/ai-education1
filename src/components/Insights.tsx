@@ -20,10 +20,10 @@ export default function Insights({ plan, onBack }: Props) {
   const [aiReport, setAiReport] = useState<{ overallAssessment?: string; recommendations?: string[] } | null>(null);
 
   useEffect(() => {
-    const allTasks = plan.weeks.flatMap(w => w.tasks).map(t => ({
+    const summary = plan.weeks.flatMap(w => w.tasks).slice(0, 100).map(t => ({
       title: t.title, status: t.status, difficulty: t.difficulty, category: t.category, delayedReason: t.delayedReason,
     }));
-    aiGetInsights({ allTasks: allTasks as any, dailyLogs }).then(res => {
+    aiGetInsights({ allTasks: summary, dailyLogs }).then(res => {
       if (res.success) setAiReport(res as any);
     });
   }, [plan]);

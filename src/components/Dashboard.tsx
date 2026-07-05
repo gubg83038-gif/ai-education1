@@ -2,8 +2,9 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import type { Plan, Task, TaskStatus, DailyLog } from '../types';
 import { adjustPlan } from '../engine/adjuster';
 import { updateTaskStatus, saveDailyLog, getDailyLog, updatePlan, addTaskToPlan, updateTaskInPlan, deleteTaskFromPlan } from '../data/store';
-import { Check, Clock, SkipForward, AlertCircle, ChevronRight, ChevronLeft, BarChart3, Battery, Brain, Plus, Trash2, Edit3, ArrowLeft, MoveUp, MoveDown, Sparkles, X, Lightbulb, Play, Timer, RotateCcw } from 'lucide-react';
+import { Check, Clock, SkipForward, AlertCircle, ChevronRight, ChevronLeft, BarChart3, Battery, Brain, Plus, Trash2, Edit3, ArrowLeft, MoveUp, MoveDown, Sparkles, X, Lightbulb, Play, Timer, RotateCcw, Key } from 'lucide-react';
 import { CoachReview, ProcrastinationWarning, TodayPreview } from './Coach';
+import Settings from './Settings';
 
 interface Props {
   planId: string;
@@ -41,6 +42,7 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
   const [showDailyLog, setShowDailyLog] = useState(false);
   const [showAddTask, setShowAddTask] = useState<{ week: number; day: number } | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
 
   const [recentlyChanged, setRecentlyChanged] = useState<Task[]>([]);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info'; week: number; day: number } | null>(null);
@@ -323,6 +325,9 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
           <button className="btn btn-accent" onClick={onViewInsights}>
             <Lightbulb size={16} /> 洞察报告
           </button>
+          <button className="btn btn-ghost" onClick={() => setShowSettings(true)} title="AI设置">
+            <Key size={16} />
+          </button>
         </div>
       </header>
 
@@ -519,6 +524,9 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
           onClose={() => setEditingTask(null)}
         />
       )}
+
+      {/* Settings Modal */}
+      {showSettings && <Settings onClose={() => setShowSettings(false)} />}
     </div>
   );
 }
