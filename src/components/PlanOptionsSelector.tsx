@@ -3,7 +3,14 @@ import type { UserProfile } from '../types';
 import { generatePlanOptions } from '../engine/planOptions';
 import { generatePlan } from '../engine/planGenerator';
 import { addPlan } from '../data/store';
+import { aiGeneratePlan } from '../lib/ai';
 import { Sparkles, Clock, BarChart3, ChevronLeft, Zap, Star } from 'lucide-react';
+
+function getDateFromOffset(startDate: string, offsetDays: number): string {
+  const [y, m, d] = startDate.split('-').map(Number);
+  const date = new Date(y, m - 1, d + offsetDays);
+  return date.toISOString().split('T')[0];
+}
 
 interface Props {
   profile: UserProfile & { planName: string };
@@ -16,18 +23,72 @@ export default function PlanOptionsSelector({ profile, onBack, onComplete }: Pro
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!selectedId) return;
     setIsGenerating(true);
 
     const option = options.find(o => o.id === selectedId)!;
-    setTimeout(() => {
-      const plan = generatePlan(option.profile);
+
+    // Try AI generation first
+    const aiResult = await aiGeneratePlan({
+      goal: option.profile.goal,
+      timePerDay: option.profile.timePerDay,
+      difficultyTolerance: option.profile.difficultyTolerance,
+      learningStyles: option.profile.learningStyles,
+      constraints: option.profile.constraints,
+      splitByHalfDay: option.profile.splitByHalfDay,
+      startDate: option.profile.startDate,
+    });
+
+    let plan;
+    if (aiResult.success && aiResult.weeks) {
+      // Convert AI format: weeks[].tasks = [{day:1, tasks:[...]}] -> flat tasks[]
+      const flatWeeks = aiResult.weeks.map((w: any) => ({
+        weekNumber: w.weekNumber || 1,
+        theme: w.theme || '学习阶段',
+        goals: w.goals || [],
+        tasks: (w.tasks || []).flatMap((dayGroup: any) =>
+          (dayGroup.tasks || []).map((t: any, i: number) => ({
+            id: `ai_w${w.weekNumber}_d${dayGroup.day}_${i}`,
+            title: t.title || '学习任务',
+            description: t.description || '',
+            estimatedMinutes: t.estimatedMinutes || 30,
+            difficulty: t.difficulty || 2,
+            week: w.weekNumber || 1,
+            day: dayGroup.day || 1,
+            date: '',
+            status: 'pending' as const,
+            category: t.category || '学习',
+            order: i,
+            halfDay: t.halfDay || undefined,
+          }))
+        ),
+      }));
+
+      // Fix dates based on startDate
+      flatWeeks.forEach((w: any) => {
+        w.tasks.forEach((t: any, idx: number) => {
+          t.date = getDateFromOffset(option.profile.startDate, (w.weekNumber - 1) * 7 + t.day - 1);
+          t.id = t.id || `ai_${Date.now()}_${idx}`;
+        });
+      });
+
+      plan = {
+        id: `plan_${Date.now()}`,
+        name: profile.planName || profile.goal.slice(0, 20),
+        profile: option.profile,
+        weeks: flatWeeks,
+        createdAt: new Date().toISOString(),
+      };
+    } else {
+      // Fallback to rule engine
+      plan = generatePlan(option.profile);
       plan.name = profile.planName || profile.goal.slice(0, 20);
-      addPlan(plan);
-      setIsGenerating(false);
-      onComplete();
-    }, 1200);
+    }
+
+    addPlan(plan);
+    setIsGenerating(false);
+    onComplete();
   };
 
   if (isGenerating) {

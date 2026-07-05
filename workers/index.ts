@@ -11,45 +11,11 @@ const corsHeaders = {
 };
 
 const SYSTEM_PROMPTS = {
-  'generate-plan': `你是资深学习规划师。根据用户信息，生成极其详细的4周结构化学习计划。
+  'generate-plan': `你是资深学习规划师。根据用户信息生成详细的4周学习计划JSON。
 
-你必须返回严格JSON（不要markdown代码块）：
-{
-  "weeks": [
-    {
-      "weekNumber": 1,
-      "theme": "阶段主题（4字以内）",
-      "goals": ["本周要达成的具体目标，可量化"],
-      "tasks": [
-        {
-          "day": 1,
-          "tasks": [
-            {
-              "title": "具体任务标题",
-              "description": "详细描述：做什么、怎么做、用什么资源、达到什么标准算完成。至少30字",
-              "estimatedMinutes": 45,
-              "difficulty": 3,
-              "category": "阅读|练习|实践|观看|整理|输出|复习",
-              "halfDay": "morning"
-            }
-          ]
-        }
-      ]
-    }
-  ]
-}
+格式：{"weeks":[{"weekNumber":1,"theme":"主题","goals":["可量化目标"],"tasks":[{"day":1,"tasks":[{"title":"任务","description":"具体描述（含做什么、怎么做、完成标准，20-40字）","estimatedMinutes":45,"difficulty":3,"category":"阅读|练习|实践|观看|整理|输出|复习","halfDay":"morning"}]}]}]}
 
-详细规则：
-1. 每周7天，每天2-5个任务，总时长不超过用户每日可用时间
-2. 任务描述务必具体：包含具体行动（「阅读XX教程第3章」「完成5道XX练习题」「写200字总结」），说明用什么工具/资源，明确完成标准
-3. 难度1-5，前两周1-3为主，后两周3-5为主，自然递增
-4. 每周三穿插知识整理/复盘任务，每周日安排本周回顾+下周预习
-5. 每天首个任务应是难度较低的「热身任务」，帮助进入状态
-6. 每天最后一个任务应是「今日小结/记录」，5-10分钟
-7. 每类任务每周至少出现一次，保持多样性
-8. 如果用户开启了上下午拆分，halfDay填"morning"或"afternoon"，上午安排重点学习，下午安排练习/复习
-9. 每周的goals要可量化（如「掌握XX基础概念，完成10道练习题」「能独立完成XX项目」）
-10. 根据用户的学习风格偏好调整任务类型比例`,
+规则：每周7天每天2-5个任务；难度1-5前两周偏低后两周递增；每天首任务为低难度热身；末任务为5-10分钟今日小结；周三穿插整理复习；周日安排本周回顾；描述务必具体可执行；总时长不超每日可用时间。`,
 
 
   'coach-chat': `你是AI学习教练。根据用户执行数据给出个性化反馈。
@@ -121,10 +87,15 @@ export default {
           { role: 'user', content: userMessage },
         ],
         env,
-        { temperature: isGeneratePlan ? 0.8 : 0.7, jsonMode: true, maxTokens: isGeneratePlan ? 8192 : 4096 },
+        { temperature: isGeneratePlan ? 0.8 : 0.7, jsonMode: true, maxTokens: isGeneratePlan ? 3072 : 4096 },
       );
 
-      const data = JSON.parse(content);
+      // Handle markdown-wrapped JSON from DeepSeek
+      let cleaned = content.trim();
+      if (cleaned.startsWith('```')) {
+        cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+      }
+      const data = JSON.parse(cleaned);
       return new Response(JSON.stringify({ success: true, ...data }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
