@@ -2031,6 +2031,24 @@ textarea, input[type="text"], input[type="date"] {
   color: var(--text-muted);
 }
 
+.key-btn {
+  position: relative;
+}
+
+.key-indicator {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+
 /* Responsive */
 @media (max-width: 640px) {
   .onboarding-card { padding: 24px 20px; }

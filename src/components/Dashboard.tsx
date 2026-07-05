@@ -2,7 +2,8 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import type { Plan, Task, TaskStatus, DailyLog } from '../types';
 import { adjustPlan } from '../engine/adjuster';
 import { updateTaskStatus, saveDailyLog, getDailyLog, updatePlan, addTaskToPlan, updateTaskInPlan, deleteTaskFromPlan } from '../data/store';
-import { Check, Clock, SkipForward, AlertCircle, ChevronRight, ChevronLeft, BarChart3, Battery, Brain, Plus, Trash2, Edit3, ArrowLeft, MoveUp, MoveDown, Sparkles, X, Lightbulb, Play, Timer, RotateCcw, Key } from 'lucide-react';
+import { aiGeneratePlan } from '../lib/ai';
+import { Check, Clock, SkipForward, AlertCircle, ChevronRight, ChevronLeft, BarChart3, Battery, Brain, Plus, Trash2, Edit3, ArrowLeft, MoveUp, MoveDown, Sparkles, X, Lightbulb, Play, Timer, RotateCcw, Key, RefreshCw } from 'lucide-react';
 import { CoachReview, ProcrastinationWarning, TodayPreview } from './Coach';
 import Settings from './Settings';
 
@@ -29,6 +30,40 @@ function getDayLabel(dayIndex: number): string {
 }
 const CATEGORIES = ['阅读', '练习', '实践', '观看', '整理', '输出', '复习', '休息', '自定义'];
 
+function computeDate(startDate: string, offsetDays: number): string {
+  const [y, m, d] = startDate.split('-').map(Number);
+  const date = new Date(y, m - 1, d + offsetDays);
+  return date.toISOString().split('T')[0];
+}
+
+function convertAIWeeks(aiWeeks: any[], profile: any, name: string) {
+  return {
+    weeks: aiWeeks.map((w: any) => ({
+      weekNumber: w.weekNumber || 1,
+      theme: w.theme || '学习阶段',
+      goals: w.goals || [],
+      tasks: (w.tasks || []).flatMap((dayGroup: any) =>
+        (dayGroup.tasks || []).map((t: any, i: number) => ({
+          id: `ai_w${w.weekNumber}_d${dayGroup.day}_${i}_${Date.now()}`,
+          title: t.title || '学习任务',
+          description: t.description || '',
+          estimatedMinutes: t.estimatedMinutes || 30,
+          difficulty: t.difficulty || 2,
+          week: w.weekNumber || 1,
+          day: dayGroup.day || 1,
+          date: computeDate(profile.startDate, (w.weekNumber - 1) * 7 + dayGroup.day - 1),
+          status: 'pending' as const,
+          category: t.category || '学习',
+          order: i,
+          halfDay: t.halfDay || undefined,
+        }))
+      ),
+    })),
+    profile,
+    name,
+  };
+}
+
 export default function Dashboard({ planId, plan: initialPlan, onBack, onViewInsights }: Props) {
   const [plan, setPlan] = useState<Plan>(initialPlan);
 
@@ -43,6 +78,30 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
   const [showAddTask, setShowAddTask] = useState<{ week: number; day: number } | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+
+  const handleRegenerate = async () => {
+    if (!confirm('确定要用 AI 重新生成整个计划吗？当前任务状态会保留。')) return;
+    setRegenerating(true);
+    const res = await aiGeneratePlan({
+      goal: plan.profile.goal,
+      timePerDay: plan.profile.timePerDay,
+      difficultyTolerance: plan.profile.difficultyTolerance,
+      learningStyles: plan.profile.learningStyles,
+      constraints: plan.profile.constraints,
+      splitByHalfDay: plan.profile.splitByHalfDay,
+      startDate: plan.profile.startDate,
+    });
+    if (res.success && res.weeks) {
+      const { weeks } = convertAIWeeks(res.weeks, plan.profile, plan.name);
+      const newPlan = { ...plan, weeks, id: plan.id, createdAt: plan.createdAt };
+      updatePlanState(newPlan);
+      showToast('AI 已重新生成详细计划', 'success');
+    } else {
+      showToast('AI 生成失败: ' + (res.error || '未知'), 'info');
+    }
+    setRegenerating(false);
+  };
 
   const [recentlyChanged, setRecentlyChanged] = useState<Task[]>([]);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info'; week: number; day: number } | null>(null);
@@ -310,7 +369,19 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
             <ArrowLeft size={16} /> 返回
           </button>
           <div>
-            <h1>{plan.name || plan.profile.goal.slice(0, 30)}</h1>
+            <h1>
+              {plan.name || plan.profile.goal.slice(0, 30)}
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={handleRegenerate}
+                disabled={regenerating}
+                title="AI 重新生成详细计划"
+                style={{ marginLeft: 10, verticalAlign: 'middle' }}
+              >
+                <RefreshCw size={14} className={regenerating ? 'spin-icon' : ''} />
+                {regenerating ? ' 生成中...' : ' AI重生成'}
+              </button>
+            </h1>
             <p className="header-goal">目标: {plan.profile.goal.slice(0, 50)}{plan.profile.goal.length > 50 ? '...' : ''}</p>
           </div>
         </div>
@@ -325,8 +396,9 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
           <button className="btn btn-accent" onClick={onViewInsights}>
             <Lightbulb size={16} /> 洞察报告
           </button>
-          <button className="btn btn-ghost" onClick={() => setShowSettings(true)} title="AI设置">
+          <button className="btn btn-ghost key-btn" onClick={() => setShowSettings(true)} title="AI设置">
             <Key size={16} />
+            {localStorage.getItem('user_deepseek_key') && <span className="key-indicator" />}
           </button>
         </div>
       </header>
