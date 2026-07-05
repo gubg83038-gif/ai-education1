@@ -15,7 +15,7 @@ interface AIResult {
 }
 
 const API_BASE = import.meta.env.PROD
-  ? 'https://ai-education.odd-nectarine.workers.dev/api/ai'
+  ? 'https://ai-education.y-study-ai.workers.dev/api/ai'
   : '/api/ai';
 
 async function postAI(endpoint: string, body: object): Promise<AIResult> {

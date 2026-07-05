@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://ai-education.odd-nectarine.workers.dev',
+        target: 'https://ai-education.y-study-ai.workers.dev',
         changeOrigin: true,
       },
     },
