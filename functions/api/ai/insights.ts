@@ -1,4 +1,4 @@
-import { callDeepSeek, parseAIResponse } from '../_lib/deepseek';
+import { callDeepSeek, parseAIResponse } from '../../lib/deepseek';
 
 const SYSTEM = `你是学习行为分析师。输出洞察JSON：{"overallAssessment":"","patterns":[{"type":"strength|weakness","description":"","suggestion":""}],"recommendations":[""]}`;
 

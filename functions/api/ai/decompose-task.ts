@@ -1,4 +1,4 @@
-import { callDeepSeek, parseAIResponse } from '../_lib/deepseek';
+import { callDeepSeek, parseAIResponse } from '../../lib/deepseek';
 
 const SYSTEM = `你是任务拆解专家。拆成3-5个子任务。返回JSON：{"subtasks":[{"title":"","description":"","estimatedMinutes":30,"difficulty":2}]}`;
 

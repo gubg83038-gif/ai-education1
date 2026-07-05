@@ -1,4 +1,4 @@
-import { callDeepSeek, parseAIResponse } from '../_lib/deepseek';
+import { callDeepSeek, parseAIResponse } from '../../lib/deepseek';
 
 const SYSTEM = `你是专业学习规划师。生成极其详细的4周学习计划JSON。
 

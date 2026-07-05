@@ -1,4 +1,4 @@
-import { callDeepSeek, parseAIResponse } from '../_lib/deepseek';
+import { callDeepSeek, parseAIResponse } from '../../lib/deepseek';
 
 const SYSTEM = `你是AI学习教练。简短温暖2-3句反馈，给可执行建议。返回JSON：{"message":"","suggestions":[{"label":"","action":"upgrade|split|reduce"}]}`;
 
