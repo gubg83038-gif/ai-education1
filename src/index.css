@@ -2049,6 +2049,26 @@ textarea, input[type="text"], input[type="date"] {
   animation: spin 1s linear infinite;
 }
 
+.ai-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ai-status.ok {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.ai-status.fail {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
 /* Responsive */
 @media (max-width: 640px) {
   .onboarding-card { padding: 24px 20px; }

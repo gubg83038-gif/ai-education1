@@ -1,3 +1,0 @@
-name = "ai-education"
-main = "workers/index.ts"
-compatibility_date = "2025-01-01"

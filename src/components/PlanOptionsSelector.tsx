@@ -82,7 +82,7 @@ export default function PlanOptionsSelector({ profile, onBack, onComplete }: Pro
     } else {
       // AI failed - show error, fallback to rule engine
       const errMsg = aiResult.error || '未知错误';
-      alert(`AI 生成失败: ${errMsg}\n\n将使用基础规则生成计划。\n\n去首页点🔑设置 DeepSeek API Key 即可使用 AI 生成详细计划。`);
+      alert(`AI 生成失败: ${errMsg}\n\n将使用基础规则生成计划。\n\n如需使用 AI 生成详细计划，请确认 Cloudflare Pages 已正确配置 DEEPSEEK_API_KEY 环境变量。`);
       plan = generatePlan(option.profile);
       plan.name = profile.planName || profile.goal.slice(0, 20);
     }

@@ -3,7 +3,7 @@ import type { Plan, Task, TaskStatus, DailyLog } from '../types';
 import { adjustPlan } from '../engine/adjuster';
 import { updateTaskStatus, saveDailyLog, getDailyLog, updatePlan, addTaskToPlan, updateTaskInPlan, deleteTaskFromPlan } from '../data/store';
 import { aiGeneratePlan } from '../lib/ai';
-import { Check, Clock, SkipForward, AlertCircle, ChevronRight, ChevronLeft, BarChart3, Battery, Brain, Plus, Trash2, Edit3, ArrowLeft, MoveUp, MoveDown, Sparkles, X, Lightbulb, Play, Timer, RotateCcw, Key, RefreshCw } from 'lucide-react';
+import { Check, Clock, SkipForward, AlertCircle, ChevronRight, ChevronLeft, BarChart3, Battery, Brain, Plus, Trash2, Edit3, ArrowLeft, MoveUp, MoveDown, Sparkles, X, Lightbulb, Play, Timer, RotateCcw, RefreshCw } from 'lucide-react';
 import { CoachReview, ProcrastinationWarning, TodayPreview } from './Coach';
 import Settings from './Settings';
 
@@ -396,9 +396,8 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
           <button className="btn btn-accent" onClick={onViewInsights}>
             <Lightbulb size={16} /> 洞察报告
           </button>
-          <button className="btn btn-ghost key-btn" onClick={() => setShowSettings(true)} title="AI设置">
-            <Key size={16} />
-            {localStorage.getItem('user_deepseek_key') && <span className="key-indicator" />}
+          <button className="btn btn-ghost" onClick={() => setShowSettings(true)} title="AI设置">
+            <Sparkles size={16} />
           </button>
         </div>
       </header>
