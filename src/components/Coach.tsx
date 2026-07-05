@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import type { Plan, Task } from '../types';
 import { Sparkles, ArrowRight, Brain, AlertTriangle } from 'lucide-react';
+import { aiCoachChat } from '../lib/ai';
 
 interface CoachProps {
   plan: Plan;
@@ -9,14 +10,37 @@ interface CoachProps {
 }
 
 export function CoachReview({ plan, recentlyChanged, onAction }: CoachProps) {
+  const [aiMsg, setAiMsg] = useState<string[]>([]);
+  const [aiSuggestions, setAiSuggestions] = useState<{ label: string; action: string }[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+
   const allTasks = plan.weeks.flatMap(w => w.tasks);
   const completedToday = recentlyChanged.filter(t => t.status === 'completed');
   const delayedToday = recentlyChanged.filter(t => t.status === 'delayed');
   const totalCompleted = allTasks.filter(t => t.status === 'completed').length;
   const rate = allTasks.length > 0 ? Math.round((totalCompleted / allTasks.length) * 100) : 0;
 
-  const messages: string[] = [];
-  const suggestions: { label: string; action: string }[] = [];
+  // Try AI coach first, fallback to rules
+  useEffect(() => {
+    if (recentlyChanged.length === 0) return;
+    setAiLoading(true);
+    aiCoachChat({
+      stats: { totalTasks: allTasks.length, completedCount: totalCompleted, rate, totalWeeks: plan.weeks.length },
+      recentActions: recentlyChanged.slice(-5).map(t => ({ title: t.title, status: t.status, delayedReason: t.delayedReason })),
+    }).then(res => {
+      setAiLoading(false);
+      if (res.success && res.message) {
+        setAiMsg([res.message]);
+        setAiSuggestions(res.suggestions || []);
+      }
+    });
+  }, [recentlyChanged.length]);
+
+  const messages: string[] = aiMsg.length > 0 ? aiMsg : [];
+  const suggestions: { label: string; action: string }[] = aiSuggestions.length > 0 ? aiSuggestions : [];
+
+  // Fallback rules when AI is not available
+  if (!aiLoading && aiMsg.length === 0) {
 
   if (completedToday.length >= 3) {
     messages.push('今天效率爆表！已经完成了' + completedToday.length + '个任务，这股势头很棒。');
@@ -47,6 +71,8 @@ export function CoachReview({ plan, recentlyChanged, onAction }: CoachProps) {
   if (messages.length === 0) {
     messages.push('新的一天，按照你的节奏稳步推进吧。每完成一个任务都是对自己的投资。');
   }
+
+  } // end fallback rules
 
   return (
     <div className="coach-banner">

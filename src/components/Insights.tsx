@@ -1,10 +1,11 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import type { Plan, InsightReport } from '../types';
 import { generateInsights } from '../engine/insights';
 import { getDailyLogs } from '../data/store';
+import { aiGetInsights } from '../lib/ai';
 import {
   TrendingUp, Target, AlertTriangle, Lightbulb, Brain,
-  Clock, Zap, Star, Activity, ChevronRight,
+  Clock, Zap, Star, Activity, ChevronRight, Sparkles,
 } from 'lucide-react';
 import { GrowthMetrics } from './Coach';
 
@@ -15,7 +16,19 @@ interface Props {
 
 export default function Insights({ plan, onBack }: Props) {
   const dailyLogs = getDailyLogs();
-  const report = useMemo(() => generateInsights(plan, dailyLogs), [plan, dailyLogs]);
+  const fallbackReport = useMemo(() => generateInsights(plan, dailyLogs), [plan, dailyLogs]);
+  const [aiReport, setAiReport] = useState<{ overallAssessment?: string; recommendations?: string[] } | null>(null);
+
+  useEffect(() => {
+    const allTasks = plan.weeks.flatMap(w => w.tasks).map(t => ({
+      title: t.title, status: t.status, difficulty: t.difficulty, category: t.category, delayedReason: t.delayedReason,
+    }));
+    aiGetInsights({ allTasks: allTasks as any, dailyLogs }).then(res => {
+      if (res.success) setAiReport(res as any);
+    });
+  }, [plan]);
+
+  const recommendations = aiReport?.recommendations || fallbackReport.recommendations;
 
   return (
     <div className="insights-page">
@@ -27,13 +40,20 @@ export default function Insights({ plan, onBack }: Props) {
         <p>基于你的执行数据，AI 分析你的学习模式</p>
       </header>
 
+      {aiReport?.overallAssessment && (
+        <div className="coach-banner" style={{ marginBottom: 20 }}>
+          <div className="coach-banner-header"><Sparkles size={14} /> AI 总评</div>
+          <p>{aiReport.overallAssessment}</p>
+        </div>
+      )}
+
       <div className="insights-grid">
-        <OverallCard report={report} />
-        <WeeklyTrendCard report={report} />
-        <CognitiveCard report={report} />
-        <DifficultyCard report={report} />
-        <ProcrastinationCard report={report} />
-        <RecommendationsCard report={report} />
+        <OverallCard report={fallbackReport} />
+        <WeeklyTrendCard report={fallbackReport} />
+        <CognitiveCard report={fallbackReport} />
+        <DifficultyCard report={fallbackReport} />
+        <ProcrastinationCard report={fallbackReport} />
+        <RecommendationsCard report={fallbackReport} aiRecs={recommendations} />
         <GrowthMetrics plan={plan} />
       </div>
     </div>
@@ -196,7 +216,8 @@ function ProcrastinationCard({ report }: { report: InsightReport }) {
   );
 }
 
-function RecommendationsCard({ report }: { report: InsightReport }) {
+function RecommendationsCard({ report, aiRecs }: { report: InsightReport; aiRecs?: string[] }) {
+  const recs = aiRecs || report.recommendations;
   return (
     <div className="insight-card recommendations-card">
       <div className="card-icon">
@@ -204,7 +225,7 @@ function RecommendationsCard({ report }: { report: InsightReport }) {
       </div>
       <h3>AI 个性化建议</h3>
       <ul className="recommendations-list">
-        {report.recommendations.map((rec, i) => (
+        {recs.map((rec, i) => (
           <li key={i}>
             <span className="rec-num">{i + 1}</span>
             <span>{rec}</span>
