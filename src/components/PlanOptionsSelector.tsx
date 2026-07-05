@@ -42,7 +42,7 @@ export default function PlanOptionsSelector({ profile, onBack, onComplete }: Pro
 
     let plan;
     if (aiResult.success && aiResult.weeks) {
-      // Convert AI format: weeks[].tasks = [{day:1, tasks:[...]}] -> flat tasks[]
+      // Convert AI format...
       const flatWeeks = aiResult.weeks.map((w: any) => ({
         weekNumber: w.weekNumber || 1,
         theme: w.theme || '学习阶段',
@@ -65,7 +65,6 @@ export default function PlanOptionsSelector({ profile, onBack, onComplete }: Pro
         ),
       }));
 
-      // Fix dates based on startDate
       flatWeeks.forEach((w: any) => {
         w.tasks.forEach((t: any, idx: number) => {
           t.date = getDateFromOffset(option.profile.startDate, (w.weekNumber - 1) * 7 + t.day - 1);
@@ -81,7 +80,9 @@ export default function PlanOptionsSelector({ profile, onBack, onComplete }: Pro
         createdAt: new Date().toISOString(),
       };
     } else {
-      // Fallback to rule engine
+      // AI failed - show error, fallback to rule engine
+      const errMsg = aiResult.error || '未知错误';
+      alert(`AI 生成失败: ${errMsg}\n\n将使用基础规则生成计划。\n\n去首页点🔑设置 DeepSeek API Key 即可使用 AI 生成详细计划。`);
       plan = generatePlan(option.profile);
       plan.name = profile.planName || profile.goal.slice(0, 20);
     }

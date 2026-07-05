@@ -46,7 +46,10 @@ async function callDeepSeek(
   if (!res.ok) {
     const err = await res.text();
     const status = res.status;
-    if (status === 401) throw new Error('API Key 无效，请去设置页重新填写');
+    if (status === 401) {
+      console.warn('[AI] DeepSeek 401 - API Key 无效，请去设置页更换 Key');
+      throw new Error('API Key 无效，请去设置页重新填写');
+    }
     throw new Error(`DeepSeek ${status}: ${err.slice(0, 100)}`);
   }
 

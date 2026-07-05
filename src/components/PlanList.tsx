@@ -3,7 +3,8 @@ import type { Plan } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { getPlans, deletePlan } from '../data/store';
 import Onboarding from './Onboarding';
-import { Plus, Trash2, BarChart3, Calendar, Target, LogOut } from 'lucide-react';
+import Settings from './Settings';
+import { Plus, Trash2, BarChart3, Calendar, Target, LogOut, Key, Sparkles } from 'lucide-react';
 
 interface Props {
   onSelectPlan: (planId: string) => void;
@@ -13,6 +14,8 @@ export default function PlanList({ onSelectPlan }: Props) {
   const { user, logout } = useAuth();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const hasKey = !!localStorage.getItem('user_deepseek_key');
 
   const refreshPlans = useCallback(() => {
     setPlans(getPlans());
@@ -57,6 +60,9 @@ export default function PlanList({ onSelectPlan }: Props) {
           <p>你好，{user?.username} — 共 {plans.length} 个计划</p>
         </div>
         <div className="header-actions">
+          <button className="btn btn-ghost key-btn" onClick={() => setShowSettings(true)} title="AI 设置">
+            {hasKey ? <Sparkles size={16} color="var(--primary)" /> : <Key size={16} />}
+          </button>
           <button className="btn btn-primary" onClick={handleCreatePlan}>
             <Plus size={16} /> 新建计划
           </button>
@@ -122,9 +128,10 @@ export default function PlanList({ onSelectPlan }: Props) {
                 </div>
               </div>
             );
-          })}
+          }          )}
         </div>
       )}
+      {showSettings && <Settings onClose={() => setShowSettings(false)} />}
     </div>
   );
 }
