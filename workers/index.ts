@@ -10,19 +10,14 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-const SYSTEM_PROMPTS = {
-  'generate-plan': `生成一个4周学习计划的JSON，格式：{"weeks":[{"weekNumber":1,"theme":"","goals":[""],"tasks":[{"day":1,"tasks":[{"title":"","description":"","estimatedMinutes":30,"difficulty":2,"category":"阅读"}]}]}]}。每天2-3个任务。`,
+const PROMPTS: Record<string, string> = {
+  'generate-plan': `你是学习规划师。生成4周学习计划JSON：{"weeks":[{"weekNumber":1,"theme":"","goals":[""],"tasks":[{"day":1,"tasks":[{"title":"","description":"具体描述（做什么、怎么做、完成标准，25-40字）","estimatedMinutes":45,"difficulty":3,"category":"阅读|练习|实践|观看|整理|输出|复习","halfDay":"morning"}]}]}]}`,
 
+  'coach-chat': `你是AI学习教练。简短回复2-3句并给建议。返回JSON：{"message":"","suggestions":[{"label":"","action":"upgrade|split|reduce"}]}`,
 
-  'coach-chat': `你是AI学习教练。根据用户执行数据给出个性化反馈。
-规则：简短温暖2-3句，基于数据不泛泛而谈。
-返回JSON：{ "message": "教练回复", "suggestions": [{ "label": "按钮文字", "action": "upgrade|split|reduce" }] }`,
+  'decompose-task': `你是任务拆解专家。拆成3-5个子任务。返回JSON：{"subtasks":[{"title":"","description":"","estimatedMinutes":30,"difficulty":2}]}`,
 
-  'decompose-task': `你是任务拆解专家。把任务拆成3-5个可执行的子任务。
-返回JSON：{ "subtasks": [{ "title": "", "description": "", "estimatedMinutes": number, "difficulty": 1-3 }] }`,
-
-  'insights': `你是学习行为分析师。分析用户执行数据并输出洞察报告。
-返回JSON：{ "overallAssessment": "总体评价", "patterns": [{ "type": "strength|weakness|pattern", "description": "", "suggestion": "" }], "recommendations": ["建议1"], "optimalSchedule": { "bestTimeOfDay": "上午|下午|晚间", "optimalSessionMinutes": 30, "suggestedDailyTasks": 3 } }`,
+  'insights': `你是学习分析师。输出洞察JSON：{"overallAssessment":"","patterns":[{"type":"strength|weakness","description":"","suggestion":""}],"recommendations":[""]}`,
 };
 
 export default {
@@ -40,47 +35,43 @@ export default {
       });
     }
 
-    if (!(path in SYSTEM_PROMPTS)) {
-      return new Response(JSON.stringify({ success: false, error: `Unknown endpoint: ${path}` }), {
+    if (!(path in PROMPTS)) {
+      return new Response(JSON.stringify({ success: false, error: 'Unknown endpoint' }), {
         status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
     try {
       const body: Record<string, any> = await request.json();
+      let userMsg: string;
 
-      let userMessage: string;
       if (path === 'generate-plan') {
-        userMessage = `目标：${body.goal}\n每日${body.timePerDay}分钟\n难度承受${body.difficultyTolerance}/10\n风格：${body.learningStyles?.join('、')}\n约束：${body.constraints || '无'}\n上下午：${body.splitByHalfDay ? '是' : '否'}`;
+        userMsg = `目标${body.goal} 每日${body.timePerDay}分钟 难度${body.difficultyTolerance}/10 风格${body.learningStyles?.join('、')} ${body.splitByHalfDay?'上下午拆分':''}`;
       } else if (path === 'coach-chat') {
-        userMessage = `执行数据：${JSON.stringify(body.stats)}\n近期动作：${JSON.stringify(body.recentActions)}`;
+        userMsg = `数据${JSON.stringify(body.stats)} 动作${JSON.stringify(body.recentActions)}`;
       } else if (path === 'decompose-task') {
-        userMessage = `拆解："${body.taskTitle}"。描述：${body.taskDescription}。总时长约${body.estimatedMinutes}分钟。`;
+        userMsg = `拆解"${body.taskTitle}" ${body.taskDescription} 总${body.estimatedMinutes}min`;
       } else {
-        userMessage = `任务数据：${JSON.stringify(body.allTasks?.slice(0, 50))}\n日志：${JSON.stringify(body.dailyLogs)}`;
+        userMsg = `任务${JSON.stringify(body.allTasks)} 日志${JSON.stringify(body.dailyLogs)}`;
       }
 
-      const isGeneratePlan = path === 'generate-plan';
       const content = await deepseekChat(
         [
-          { role: 'system', content: SYSTEM_PROMPTS[path as keyof typeof SYSTEM_PROMPTS] },
-          { role: 'user', content: userMessage },
+          { role: 'system', content: PROMPTS[path] },
+          { role: 'user', content: userMsg },
         ],
         env,
-        { temperature: 0.8, jsonMode: true, maxTokens: 4096 },
+        { temperature: 0.7, jsonMode: true, maxTokens: path === 'generate-plan' ? 2048 : 4096 },
       );
 
-      // Handle markdown-wrapped JSON from DeepSeek
       let cleaned = content.trim();
-      if (cleaned.startsWith('```')) {
-        cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
-      }
+      if (cleaned.startsWith('```')) cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
       const data = JSON.parse(cleaned);
       return new Response(JSON.stringify({ success: true, ...data }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     } catch (err: any) {
-      return new Response(JSON.stringify({ success: false, error: err?.message || err?.toString() || 'Unknown error' }), {
+      return new Response(JSON.stringify({ success: false, error: err?.message || 'Server error' }), {
         status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
