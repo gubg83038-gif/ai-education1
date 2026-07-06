@@ -76,9 +76,9 @@ async function postAI(endpoint: string, body: Record<string, unknown>): Promise<
   }
 }
 
-const GEN_PROMPT = `你是专业学习规划师。根据用户目标生成完整的2周学习计划JSON。
+const GEN_PROMPT = (week: number) => `你是专业学习规划师。只生成第${week}周（共2周）的${week === 1 ? '基础搭建' : '综合实践'}阶段学习计划JSON。
 
-格式：{"weeks":[{"weekNumber":1,"theme":"基础搭建","goals":["本周可量化目标"],"tasks":[{"day":1,"tasks":[{"title":"","description":"至少50字：做什么+用什么资源+完成标准","estimatedMinutes":45,"difficulty":3,"category":"阅读|练习|实践|观看|整理|输出|复习","halfDay":"morning|afternoon"}]}]},{"weekNumber":2,"theme":"综合实践","goals":[""],"tasks":[...]}]}
+格式：{"week":{"weekNumber":${week},"theme":"${week === 1 ? '基础搭建' : '综合实践'}","goals":["本周可量化目标"],"tasks":[{"day":1,"tasks":[{"title":"","description":"至少50字：做什么+用什么资源+完成标准","estimatedMinutes":45,"difficulty":3,"category":"阅读|练习|实践|观看|整理|输出|复习","halfDay":"morning|afternoon"}]}]}}
 
 description 严格要求：
 - 至少50字，包含3要素：1)具体做什么 2)工具/书籍/资源 3)可量化完成标准
@@ -86,7 +86,7 @@ description 严格要求：
 - 正确示例："阅读《Python编程》第4-5章if语句和字典，在Jupyter完成课后5道练习题，能独立写判断成绩的程序并运行通过"
 - 每个任务的description必须独一无二
 
-规则：每周7天每天2-3个任务（不超可用时间）；首任务热身末任务小结；第1周难度1-3为主，第2周3-5为主；周三复习周日回顾`;
+规则：7天每天2-3个任务（不超可用时间）；首任务热身末任务小结；${week === 1 ? '难度1-3为主' : '难度3-5为主'}；周三复习周日回顾`;
 
 const COACH_PROMPT = `你是AI学习教练。简短温暖2-3句反馈，给可执行建议。返回JSON：{"message":"","suggestions":[{"label":"","action":"upgrade|split|reduce"}]}`;
 
@@ -100,13 +100,18 @@ export async function aiGeneratePlan(params: {
 }): Promise<AIResult> {
   const userMsg = `用户目标：${params.goal}\n每日${params.timePerDay}分钟\n难度承受：${params.difficultyTolerance}/10\n偏好风格：${params.learningStyles?.join('、')}\n约束条件：${params.constraints || '无'}\n上下午拆分：${params.splitByHalfDay ? '是' : '否'}`;
 
-  // 1) 尝试拿代理 Key → 浏览器直调（无超时）
+  // 1) 尝试拿代理 Key → 浏览器直调（无超时），逐周生成避免截断
   const key = await getProxyKey();
   if (key) {
     try {
-      const raw = await callDeepSeekDirect(key, GEN_PROMPT, userMsg, { temperature: 0.8, maxTokens: 8192, jsonMode: true });
-      const data = JSON.parse(cleanJSON(raw));
-      return { success: true, weeks: data.weeks };
+      const weeks: any[] = [];
+      for (let w = 1; w <= 2; w++) {
+        const weekMsg = `${userMsg}\n请只生成第${w}周的计划。`;
+        const raw = await callDeepSeekDirect(key, GEN_PROMPT(w), weekMsg, { temperature: 0.8, maxTokens: 4096, jsonMode: true });
+        const data = JSON.parse(cleanJSON(raw));
+        weeks.push(data.week || { weekNumber: w, theme: '学习阶段', goals: [], tasks: [] });
+      }
+      return { success: true, weeks };
     } catch (err: any) {
       return { success: false, error: err.message || 'AI 生成失败' };
     }
