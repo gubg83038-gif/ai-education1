@@ -16,11 +16,16 @@ async function postAI(endpoint: string, body: Record<string, unknown>): Promise<
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
+
+    if (res.status === 500) {
+      return { success: false, error: 'AI 服务繁忙，请稍后重试（可能是网络延迟或请求超时）' };
+    }
+
     const json = await res.json();
     if (json.success) return json as AIResult;
-    return { success: false, error: json.error || '服务异常' };
+    return { success: false, error: json.error || 'AI 响应异常' };
   } catch {
-    return { success: false, error: 'AI 服务不可用' };
+    return { success: false, error: '网络连接失败，请检查网络后重试' };
   }
 }
 
