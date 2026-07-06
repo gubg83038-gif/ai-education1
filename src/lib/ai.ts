@@ -104,7 +104,7 @@ export async function aiGeneratePlan(params: {
   const key = await getProxyKey();
   if (key) {
     try {
-      const raw = await callDeepSeekDirect(key, GEN_PROMPT, userMsg, { temperature: 0.8, maxTokens: 4096, jsonMode: true });
+      const raw = await callDeepSeekDirect(key, GEN_PROMPT, userMsg, { temperature: 0.8, maxTokens: 8192, jsonMode: true });
       const data = JSON.parse(cleanJSON(raw));
       return { success: true, weeks: data.weeks };
     } catch (err: any) {
