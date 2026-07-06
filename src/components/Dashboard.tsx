@@ -152,7 +152,7 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
     const start = new Date(sy, sm - 1, sd);
     const cur = new Date(ty, tm - 1, td);
     const diff = Math.floor((cur.getTime() - start.getTime()) / 86400000);
-    if (diff < 0 || diff >= 28) return null;
+    if (diff < 0 || diff >= plan.weeks.length * 7) return null;
     const weekNum = Math.floor(diff / 7) + 1;
     const dayNum = (diff % 7) + 1;
     return { week: weekNum, day: dayNum };
@@ -260,7 +260,7 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
     let newWeek = task.week;
     if (direction === 'prevDay') { newDay = task.day - 1; if (newDay < 1) { newDay = 7; newWeek = task.week - 1; } }
     if (direction === 'nextDay') { newDay = task.day + 1; if (newDay > 7) { newDay = 1; newWeek = task.week + 1; } }
-    if (newWeek < 1 || newWeek > 4) return;
+    if (newWeek < 1 || newWeek > plan.weeks.length) return;
 
     const newPlan = structuredClone(plan);
     const oldWeek = newPlan.weeks.find(w => w.weekNumber === task.week);
@@ -425,7 +425,7 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
             </div>
           </button>
         ))}
-        <button className="btn btn-icon" onClick={() => setActiveWeek(Math.min(4, activeWeek + 1))} disabled={activeWeek === 4}>
+        <button className="btn btn-icon" onClick={() => setActiveWeek(Math.min(plan.weeks.length, activeWeek + 1))} disabled={activeWeek === plan.weeks.length}>
           <ChevronRight size={20} />
         </button>
       </div>

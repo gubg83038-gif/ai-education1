@@ -39,7 +39,7 @@ const LEARNING_ACTIONS: Record<string, { title: string; desc: string; cat: strin
   ],
 };
 
-const WEEK_THEMES = ['基础搭建', '深入探索', '综合实践', '巩固与突破'];
+const WEEK_THEMES = ['基础搭建与探索', '综合实践与突破'];
 
 function parseGoal(goal: string): string[] {
   return goal.split(/[,，、;；]/).map(s => s.trim()).filter(Boolean);
@@ -64,10 +64,10 @@ export function generatePlan(profile: UserProfile): Plan {
   const actions = actionsList.length > 0 ? actionsList : LEARNING_ACTIONS.mixed;
   const weeks: WeekPlan[] = [];
 
-  for (let w = 1; w <= 4; w++) {
+  for (let w = 1; w <= 2; w++) {
     const theme = WEEK_THEMES[w - 1];
     const weekGoals = subgoals.map((g, i) => {
-      const progress = Math.round((w / 4) * 100);
+      const progress = Math.round((w / 2) * 100);
       const goalText = i === 0
         ? `${g} - 完成${theme}阶段(${progress}%)`
         : `${g} - ${theme}阶段推进`;

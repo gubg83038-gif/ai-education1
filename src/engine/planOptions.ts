@@ -27,10 +27,10 @@ export function generatePlanOptions(baseProfile: UserProfile & { planName: strin
     name: '稳扎稳打',
     emoji: '🎯',
     description: '均衡分配理论学习和实践练习，每天任务量适中，难度稳步递增，适合大多数学习者。',
-    strategy: '采用4周递进策略：基础搭建→深入探索→综合实践→巩固突破，每周穿插不同类型的任务保持新鲜感。',
+    strategy: '采用2周递进策略：基础搭建→综合实践，每周穿插不同类型的任务保持新鲜感。',
     profile: steadyProfile,
     previewTasks: generatePreview(steadyProfile, 'balanced'),
-    tags: ['均衡', '推荐', '4周递进'],
+    tags: ['均衡', '推荐', '2周递进'],
   });
 
   // Option 2: Light & Easy
