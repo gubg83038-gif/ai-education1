@@ -23,19 +23,18 @@ export async function onRequest(context: any) {
     const body = await context.request.json();
     const baseInfo = `目标：${body.goal}\n每日${body.timePerDay}分钟\n难度${body.difficultyTolerance}/10\n风格：${body.learningStyles?.join('、')}\n约束：${body.constraints || '无'}\n上下午拆分：${body.splitByHalfDay ? '是' : '否'}`;
 
-    const weeks: any[] = [];
-    for (let w = 1; w <= 4; w++) {
-      const userMsg = `${baseInfo}\n\n请只生成第${w}周的计划。`;
+    // 并行生成4周，总耗时 ~8s，不会超时
+    const weekResults = await Promise.all([1, 2, 3, 4].map(async (w) => {
       try {
-        const raw = await callDeepSeek(context.env, WEEK_SYSTEM(w, 4), userMsg, { temperature: 0.8, maxTokens: 1024, jsonMode: true });
+        const raw = await callDeepSeek(context.env, WEEK_SYSTEM(w, 4), `${baseInfo}\n生成第${w}周。`, { temperature: 0.8, maxTokens: 1024, jsonMode: true });
         const data = parseAIResponse(raw);
-        weeks.push(data.week || { weekNumber: w, theme: '学习阶段', goals: [], tasks: [] });
+        return data.week || { weekNumber: w, theme: '学习阶段', goals: [], tasks: [] };
       } catch (err: any) {
-        weeks.push({ weekNumber: w, theme: '阶段 ' + w, goals: ['本周目标'], tasks: [], _error: err.message });
+        return { weekNumber: w, theme: '阶段 ' + w, goals: [], tasks: [], _error: err.message };
       }
-    }
+    }));
 
-    return new Response(JSON.stringify({ success: true, weeks }), {
+    return new Response(JSON.stringify({ success: true, weeks: weekResults }), {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (err: any) {
