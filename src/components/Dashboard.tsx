@@ -319,6 +319,10 @@ export default function Dashboard({ planId, plan: initialPlan, onBack, onViewIns
       showToast(`第${todayWeek}周 第${todayDay}天 · 已提升 ${count} 个任务难度`, 'success', todayWeek, todayDay);
     } else if (action === 'split') {
       const delayed = allTasks.filter(t => t.status === 'delayed');
+      if (delayed.length === 0) {
+        showToast('当前没有延迟任务可拆分，请先将任务标记为延迟再试', 'info');
+        return;
+      }
       const task = delayed[0];
       if (task) {
         task.status = 'pending';
