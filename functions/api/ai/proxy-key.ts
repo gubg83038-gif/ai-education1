@@ -1,4 +1,13 @@
 export async function onRequest(context: any) {
+  const origin = context.request.headers.get('Origin') || '';
+  const referer = context.request.headers.get('Referer') || '';
+  if (!origin.includes('ai-education2.pages.dev') && !referer.includes('ai-education2.pages.dev')) {
+    return new Response(JSON.stringify({ success: false, error: 'Forbidden' }), {
+      status: 403,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   const key = context.env?.DEEPSEEK_API_KEY;
   if (!key) {
     return new Response(JSON.stringify({ success: false, error: 'Key not configured' }), {
